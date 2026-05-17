@@ -67,12 +67,14 @@ export default {
   },
   library: {
     title: 'List of Truth',
-    subtitle: 'All downloaded tracks — delete an entry to allow re-downloading.',
+    subtitle:
+      'All downloaded tracks — delete an entry to allow re-downloading.',
     empty: 'No tracks downloaded yet.',
     emptyHint: 'Download a song and it will appear here.',
     failedLoad: 'Failed to load the List of Truth.',
     failedDelete: 'Failed to remove entry.',
-    deletePrompt: 'Remove from List of Truth? The song can then be downloaded again.',
+    deletePrompt:
+      'Remove from List of Truth? The song can then be downloaded again.',
     deleteSuccess: 'Entry removed. Song can be downloaded again.',
     countOne: '{count} track',
     countMany: '{count} tracks',
@@ -85,9 +87,11 @@ export default {
     title: 'Organizer Rules',
     subtitle: 'Manage genre rules and artist alias mappings.',
     genreRules: 'Genre Rules',
-    genreRulesHint: 'First match wins. New rules are added at the top (highest priority).',
+    genreRulesHint:
+      'First match wins. New rules are added at the top (highest priority).',
     artistRules: 'Artist Alias Rules',
-    artistRulesHint: 'If the artist name contains the pattern (case-insensitive), it is mapped to the target artist.',
+    artistRulesHint:
+      'If the artist name contains the pattern (case-insensitive), it is mapped to the target artist.',
     keyword: 'Keyword',
     folder: 'Folder',
     pattern: 'Artist Pattern',
@@ -107,7 +111,8 @@ export default {
     newPattern: 'artist pattern',
     newArtist: 'target artist name',
     artistGenreRules: 'Artist → Genre Rules',
-    artistGenreRulesHint: 'Map artist name patterns directly to a genre folder (highest priority — bypasses all API lookups). One match per artist.',
+    artistGenreRulesHint:
+      'Map artist name patterns directly to a genre folder (highest priority — bypasses all API lookups). One match per artist.',
     newArtistPattern: 'artist pattern (e.g. bonz)',
     newGenre: 'target genre / folder',
     addArtistGenreRule: 'Add Rule',

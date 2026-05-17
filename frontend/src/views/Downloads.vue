@@ -19,7 +19,10 @@
           @click="refresh"
           :disabled="loading"
         >
-          <span v-if="loading" class="loading loading-spinner loading-xs mr-2" />
+          <span
+            v-if="loading"
+            class="loading loading-spinner loading-xs mr-2"
+          />
           <Icon v-else icon="clarity:refresh-line" class="h-4 w-4 mr-2" />
           {{ t('common.refresh') }}
         </button>
@@ -98,7 +101,9 @@
             <span class="text-sm font-medium truncate block">
               {{ displayFilename(item) }}
             </span>
-            <span class="text-xs text-base-content/40 flex items-center gap-2 mt-0.5 flex-wrap">
+            <span
+              class="text-xs text-base-content/40 flex items-center gap-2 mt-0.5 flex-wrap"
+            >
               <span v-if="item.playlist_name" class="text-primary/70">
                 <Icon
                   icon="clarity:playlist-line"
@@ -169,10 +174,7 @@
       </nav>
 
       <!-- Count footer -->
-      <p
-        v-if="total > 0"
-        class="mt-6 text-xs text-base-content/40 text-center"
-      >
+      <p v-if="total > 0" class="mt-6 text-xs text-base-content/40 text-center">
         {{
           total === 1
             ? t('library.countOne', { count: total })
@@ -230,7 +232,11 @@ async function loadTruth() {
   loading.value = true
   error.value = ''
   try {
-    const res = await API.listTruth(searchInput.value, currentPage.value, PAGE_SIZE)
+    const res = await API.listTruth(
+      searchInput.value,
+      currentPage.value,
+      PAGE_SIZE
+    )
     items.value = res.data.items || []
     total.value = res.data.total || 0
     totalPages.value = res.data.pages || 1
@@ -309,7 +315,9 @@ onMounted(loadTruth)
 <style scoped>
 .toast-enter-active,
 .toast-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
 }
 .toast-enter-from,
 .toast-leave-to {

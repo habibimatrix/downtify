@@ -29,7 +29,10 @@
             :disabled="saving"
             @click="saveRules"
           >
-            <span v-if="saving" class="loading loading-spinner loading-xs mr-2" />
+            <span
+              v-if="saving"
+              class="loading loading-spinner loading-xs mr-2"
+            />
             {{ t('organizer.save') }}
           </button>
         </div>
@@ -43,10 +46,18 @@
           :class="saveResult === 'ok' ? 'text-primary' : 'text-error'"
         >
           <Icon
-            :icon="saveResult === 'ok' ? 'clarity:check-circle-line' : 'clarity:exclamation-circle-line'"
+            :icon="
+              saveResult === 'ok'
+                ? 'clarity:check-circle-line'
+                : 'clarity:exclamation-circle-line'
+            "
             class="h-5 w-5 shrink-0"
           />
-          <span>{{ saveResult === 'ok' ? t('organizer.saved') : t('organizer.saveError') }}</span>
+          <span>{{
+            saveResult === 'ok'
+              ? t('organizer.saved')
+              : t('organizer.saveError')
+          }}</span>
         </div>
       </Transition>
 
@@ -62,12 +73,18 @@
         <!-- ══════════════════════════════════════════════════════════ -->
         <section class="mb-10">
           <div class="mb-3">
-            <h2 class="text-base font-semibold">{{ t('organizer.artistGenreRules') }}</h2>
-            <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.artistGenreRulesHint') }}</p>
+            <h2 class="text-base font-semibold">
+              {{ t('organizer.artistGenreRules') }}
+            </h2>
+            <p class="text-xs text-base-content/50 mt-0.5">
+              {{ t('organizer.artistGenreRulesHint') }}
+            </p>
           </div>
 
           <!-- Add form -->
-          <div class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center">
+          <div
+            class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center"
+          >
             <input
               v-model="newArtistPattern"
               type="text"
@@ -75,7 +92,10 @@
               class="flex-1 min-w-[140px] rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 focus:outline-none px-3 py-2 text-sm"
               @keydown.enter="addArtistGenreRule"
             />
-            <Icon icon="clarity:arrow-line" class="h-4 w-4 text-base-content/30 shrink-0" />
+            <Icon
+              icon="clarity:arrow-line"
+              class="h-4 w-4 text-base-content/30 shrink-0"
+            />
             <div class="flex-1 min-w-[140px] relative">
               <input
                 v-model="newArtistGenre"
@@ -112,10 +132,15 @@
                 :key="idx"
                 class="flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
               >
-                <span class="flex-1 text-sm font-mono text-base-content/80 truncate">
+                <span
+                  class="flex-1 text-sm font-mono text-base-content/80 truncate"
+                >
                   *{{ rule.pattern }}*
                 </span>
-                <Icon icon="clarity:arrow-line" class="h-3.5 w-3.5 text-base-content/30 shrink-0" />
+                <Icon
+                  icon="clarity:arrow-line"
+                  class="h-3.5 w-3.5 text-base-content/30 shrink-0"
+                />
                 <span class="text-sm font-medium text-primary truncate flex-1">
                   {{ rule.genre }}
                 </span>
@@ -137,8 +162,12 @@
         <section class="mb-10">
           <div class="flex items-center justify-between mb-3">
             <div>
-              <h2 class="text-base font-semibold">{{ t('organizer.genreRules') }}</h2>
-              <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.genreRulesHint') }}</p>
+              <h2 class="text-base font-semibold">
+                {{ t('organizer.genreRules') }}
+              </h2>
+              <p class="text-xs text-base-content/50 mt-0.5">
+                {{ t('organizer.genreRulesHint') }}
+              </p>
             </div>
             <span class="text-xs text-base-content/40">
               {{ t('organizer.ruleCount', { n: filteredGenreRules.length }) }}
@@ -164,12 +193,16 @@
               class="rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 focus:outline-none px-3 py-2 text-sm"
             >
               <option value="">{{ t('organizer.filterFolder') }}</option>
-              <option v-for="f in availableFolders" :key="f" :value="f">{{ f }}</option>
+              <option v-for="f in availableFolders" :key="f" :value="f">
+                {{ f }}
+              </option>
             </select>
           </div>
 
           <!-- Add new rule form -->
-          <div class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center">
+          <div
+            class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center"
+          >
             <input
               v-model="newKeyword"
               type="text"
@@ -177,7 +210,10 @@
               class="flex-1 min-w-[140px] rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 focus:outline-none px-3 py-2 text-sm"
               @keydown.enter="addGenreRule"
             />
-            <Icon icon="clarity:arrow-line" class="h-4 w-4 text-base-content/30 shrink-0" />
+            <Icon
+              icon="clarity:arrow-line"
+              class="h-4 w-4 text-base-content/30 shrink-0"
+            />
             <div class="flex-1 min-w-[140px] relative">
               <input
                 v-model="newFolder"
@@ -214,10 +250,15 @@
                 :key="getRuleKey(rule)"
                 class="flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
               >
-                <span class="flex-1 text-sm font-mono text-base-content/80 truncate">
+                <span
+                  class="flex-1 text-sm font-mono text-base-content/80 truncate"
+                >
                   {{ rule.keyword }}
                 </span>
-                <Icon icon="clarity:arrow-line" class="h-3.5 w-3.5 text-base-content/30 shrink-0" />
+                <Icon
+                  icon="clarity:arrow-line"
+                  class="h-3.5 w-3.5 text-base-content/30 shrink-0"
+                />
                 <span
                   class="text-xs font-semibold px-2 py-0.5 rounded-lg shrink-0"
                   :class="folderBadgeClass(rule.folder)"
@@ -236,7 +277,10 @@
           </div>
 
           <!-- Genre pagination -->
-          <div v-if="genreTotalPages > 1" class="mt-4 flex items-center justify-center gap-1">
+          <div
+            v-if="genreTotalPages > 1"
+            class="mt-4 flex items-center justify-center gap-1"
+          >
             <button
               class="icon-btn"
               :disabled="genrePage === 1"
@@ -264,12 +308,18 @@
         <!-- ══════════════════════════════════════════════════════════ -->
         <section>
           <div class="mb-3">
-            <h2 class="text-base font-semibold">{{ t('organizer.artistRules') }}</h2>
-            <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.artistRulesHint') }}</p>
+            <h2 class="text-base font-semibold">
+              {{ t('organizer.artistRules') }}
+            </h2>
+            <p class="text-xs text-base-content/50 mt-0.5">
+              {{ t('organizer.artistRulesHint') }}
+            </p>
           </div>
 
           <!-- Add alias form -->
-          <div class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center">
+          <div
+            class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center"
+          >
             <input
               v-model="newPattern"
               type="text"
@@ -277,7 +327,10 @@
               class="flex-1 min-w-[140px] rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 focus:outline-none px-3 py-2 text-sm"
               @keydown.enter="addArtistRule"
             />
-            <Icon icon="clarity:arrow-line" class="h-4 w-4 text-base-content/30 shrink-0" />
+            <Icon
+              icon="clarity:arrow-line"
+              class="h-4 w-4 text-base-content/30 shrink-0"
+            />
             <input
               v-model="newArtist"
               type="text"
@@ -308,10 +361,15 @@
                 :key="idx"
                 class="flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
               >
-                <span class="flex-1 text-sm font-mono text-base-content/80 truncate">
+                <span
+                  class="flex-1 text-sm font-mono text-base-content/80 truncate"
+                >
                   *{{ rule.pattern }}*
                 </span>
-                <Icon icon="clarity:arrow-line" class="h-3.5 w-3.5 text-base-content/30 shrink-0" />
+                <Icon
+                  icon="clarity:arrow-line"
+                  class="h-3.5 w-3.5 text-base-content/30 shrink-0"
+                />
                 <span class="text-sm font-medium text-primary truncate flex-1">
                   {{ rule.artist }}
                 </span>
@@ -370,7 +428,9 @@ const filteredGenreRules = computed(() => {
   if (genreSearch.value) {
     const q = genreSearch.value.toLowerCase()
     rules = rules.filter(
-      (r) => r.keyword.toLowerCase().includes(q) || r.folder.toLowerCase().includes(q)
+      (r) =>
+        r.keyword.toLowerCase().includes(q) ||
+        r.folder.toLowerCase().includes(q)
     )
   }
   if (folderFilter.value) {
@@ -392,10 +452,14 @@ watch([genreSearch, folderFilter], () => {
   genrePage.value = 1
 })
 
-watch([genreRules, artistRules, artistGenreRules], () => {
-  isDirty.value = true
-  isSaved.value = false
-}, { deep: true })
+watch(
+  [genreRules, artistRules, artistGenreRules],
+  () => {
+    isDirty.value = true
+    isSaved.value = false
+  },
+  { deep: true }
+)
 
 function getRuleKey(rule) {
   return `${rule.keyword}::${rule.folder}`
@@ -520,7 +584,9 @@ onMounted(loadConfig)
 <style scoped>
 .toast-enter-active,
 .toast-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
 }
 .toast-enter-from,
 .toast-leave-to {

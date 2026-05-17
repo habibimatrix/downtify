@@ -68,12 +68,14 @@ export default {
   },
   library: {
     title: 'List of Truth',
-    subtitle: 'Todas as faixas baixadas — exclua uma entrada para permitir novo download.',
+    subtitle:
+      'Todas as faixas baixadas — exclua uma entrada para permitir novo download.',
     empty: 'Nenhuma faixa baixada ainda.',
     emptyHint: 'Baixe uma música e ela aparecerá aqui.',
     failedLoad: 'Falha ao carregar a List of Truth.',
     failedDelete: 'Falha ao remover entrada.',
-    deletePrompt: 'Remover da List of Truth? A música poderá ser baixada novamente.',
+    deletePrompt:
+      'Remover da List of Truth? A música poderá ser baixada novamente.',
     deleteSuccess: 'Entrada removida. A música pode ser baixada novamente.',
     countOne: '{count} faixa',
     countMany: '{count} faixas',
@@ -86,9 +88,11 @@ export default {
     title: 'Regras do Organizador',
     subtitle: 'Gerencie regras de gênero e apelidos de artistas.',
     genreRules: 'Regras de Gênero',
-    genreRulesHint: 'A primeira correspondência vence. Novas regras são adicionadas no topo (maior prioridade).',
+    genreRulesHint:
+      'A primeira correspondência vence. Novas regras são adicionadas no topo (maior prioridade).',
     artistRules: 'Regras de Alias de Artista',
-    artistRulesHint: 'Se o nome do artista contiver o padrão, será mapeado para o artista destino.',
+    artistRulesHint:
+      'Se o nome do artista contiver o padrão, será mapeado para o artista destino.',
     keyword: 'Palavra-chave',
     folder: 'Pasta',
     pattern: 'Padrão de artista',
@@ -108,7 +112,8 @@ export default {
     newPattern: 'padrão de artista',
     newArtist: 'nome do artista destino',
     artistGenreRules: 'Artista → Gênero',
-    artistGenreRulesHint: 'Mapeia padrões de nome de artista diretamente para uma pasta de gênero (maior prioridade, sem chamadas de API).',
+    artistGenreRulesHint:
+      'Mapeia padrões de nome de artista diretamente para uma pasta de gênero (maior prioridade, sem chamadas de API).',
     newArtistPattern: 'padrão de artista (ex. bonz)',
     newGenre: 'gênero / pasta destino',
     addArtistGenreRule: 'Adicionar regra',

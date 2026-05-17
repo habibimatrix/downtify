@@ -40,8 +40,8 @@ from . import m3u, providers, spotify
 from .downloader import Downloader
 from .monitor import PlaylistMonitorDB, check_playlist
 from .organizer_service import (
-    DEFAULT_GENRE_RULES,
     DEFAULT_COUNTRY_TO_FOLDER,
+    DEFAULT_GENRE_RULES,
     get_organizer,
 )
 

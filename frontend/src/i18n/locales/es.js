@@ -68,12 +68,14 @@ export default {
   },
   library: {
     title: 'List of Truth',
-    subtitle: 'Todas las pistas descargadas — elimina una entrada para permitir volver a descargar.',
+    subtitle:
+      'Todas las pistas descargadas — elimina una entrada para permitir volver a descargar.',
     empty: 'Aún no hay pistas descargadas.',
     emptyHint: 'Descarga una canción y aparecerá aquí.',
     failedLoad: 'No se pudo cargar la List of Truth.',
     failedDelete: 'No se pudo eliminar la entrada.',
-    deletePrompt: '¿Eliminar de la List of Truth? La canción podrá descargarse de nuevo.',
+    deletePrompt:
+      '¿Eliminar de la List of Truth? La canción podrá descargarse de nuevo.',
     deleteSuccess: 'Entrada eliminada. La canción puede descargarse de nuevo.',
     countOne: '{count} pista',
     countMany: '{count} pistas',
@@ -86,9 +88,11 @@ export default {
     title: 'Reglas del Organizador',
     subtitle: 'Gestiona reglas de género y alias de artistas.',
     genreRules: 'Reglas de Género',
-    genreRulesHint: 'La primera coincidencia gana. Las nuevas reglas se añaden arriba (máxima prioridad).',
+    genreRulesHint:
+      'La primera coincidencia gana. Las nuevas reglas se añaden arriba (máxima prioridad).',
     artistRules: 'Reglas de Alias de Artista',
-    artistRulesHint: 'Si el nombre del artista contiene el patrón, se mapea al artista destino.',
+    artistRulesHint:
+      'Si el nombre del artista contiene el patrón, se mapea al artista destino.',
     keyword: 'Palabra clave',
     folder: 'Carpeta',
     pattern: 'Patrón de artista',
@@ -98,7 +102,8 @@ export default {
     filterRules: 'Filtrar reglas…',
     filterFolder: 'Todas las carpetas',
     save: 'Guardar reglas',
-    saved: 'Guardado. El organizador aplicará las nuevas reglas en la próxima ejecución.',
+    saved:
+      'Guardado. El organizador aplicará las nuevas reglas en la próxima ejecución.',
     saveError: 'No se pudieron guardar las reglas.',
     unsaved: 'Cambios sin guardar',
     ruleCount: '{n} reglas',
@@ -108,7 +113,8 @@ export default {
     newPattern: 'patrón de artista',
     newArtist: 'nombre del artista destino',
     artistGenreRules: 'Artista → Género',
-    artistGenreRulesHint: 'Mapea patrones de nombre de artista directamente a una carpeta de género (máxima prioridad, sin llamadas a API).',
+    artistGenreRulesHint:
+      'Mapea patrones de nombre de artista directamente a una carpeta de género (máxima prioridad, sin llamadas a API).',
     newArtistPattern: 'patrón de artista (ej. bonz)',
     newGenre: 'género / carpeta destino',
     addArtistGenreRule: 'Añadir regla',
