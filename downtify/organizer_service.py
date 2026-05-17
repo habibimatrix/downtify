@@ -1253,6 +1253,7 @@ class GenreResolver:
         self._genre_rules: list[tuple[str, str]] = DEFAULT_GENRE_RULES
         self._country_map: dict[str, str] = DEFAULT_COUNTRY_TO_FOLDER
         self._artist_rules: list[dict] = []
+        self._artist_genre_rules: list[tuple[str, str]] = []  # (pattern, genre)
 
     def reload_from_settings(self, settings: dict) -> None:
         """Hot-reload rules from settings dict (called after save via API)."""
@@ -1281,6 +1282,25 @@ class GenreResolver:
         else:
             self._artist_rules = []
 
+        raw_ag = settings.get('artist_genre_rules')
+        if raw_ag and isinstance(raw_ag, list):
+            self._artist_genre_rules = [
+                (r['pattern'].lower(), r['genre'])
+                for r in raw_ag
+                if isinstance(r, dict) and r.get('pattern') and r.get('genre')
+            ]
+        else:
+            self._artist_genre_rules = []
+
+    def _apply_artist_genre_rules(self, artist: str) -> Optional[str]:
+        """Return genre if artist matches any artist→genre rule, else None."""
+        al = artist.lower()
+        for pattern, genre in self._artist_genre_rules:
+            if pattern in al:
+                log.info(f"  Artist→Genre Rule: '{artist}' → '{genre}'")
+                return genre
+        return None
+
     def apply_artist_alias(self, raw_artist: str) -> str:
         """Apply artist alias rules: if pattern matches → return mapped artist."""
         lower = raw_artist.lower()
@@ -1296,6 +1316,11 @@ class GenreResolver:
     def resolve(self, artist: str, title: str) -> str:
         if not artist:
             return DEFAULT_FOLDER
+
+        # Artist→Genre rules: highest priority, no API calls needed
+        ag = self._apply_artist_genre_rules(artist)
+        if ag:
+            return ag
 
         # Cache prüfen
         cached = self.db.get_cached_genres(artist)

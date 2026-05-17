@@ -58,6 +58,80 @@
 
       <template v-else>
         <!-- ══════════════════════════════════════════════════════════ -->
+        <!-- ARTIST → GENRE RULES (highest priority)                  -->
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <section class="mb-10">
+          <div class="mb-3">
+            <h2 class="text-base font-semibold">{{ t('organizer.artistGenreRules') }}</h2>
+            <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.artistGenreRulesHint') }}</p>
+          </div>
+
+          <!-- Add form -->
+          <div class="surface rounded-2xl p-3 mb-3 flex flex-wrap gap-2 items-center">
+            <input
+              v-model="newArtistPattern"
+              type="text"
+              :placeholder="t('organizer.newArtistPattern')"
+              class="flex-1 min-w-[140px] rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 focus:outline-none px-3 py-2 text-sm"
+              @keydown.enter="addArtistGenreRule"
+            />
+            <Icon icon="clarity:arrow-line" class="h-4 w-4 text-base-content/30 shrink-0" />
+            <div class="flex-1 min-w-[140px] relative">
+              <input
+                v-model="newArtistGenre"
+                type="text"
+                list="ag-folder-list"
+                :placeholder="t('organizer.newGenre')"
+                class="w-full rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 focus:outline-none px-3 py-2 text-sm"
+                @keydown.enter="addArtistGenreRule"
+              />
+              <datalist id="ag-folder-list">
+                <option v-for="f in availableFolders" :key="f" :value="f" />
+              </datalist>
+            </div>
+            <button
+              class="btn btn-sm h-10 px-4 rounded-xl border-white/10 bg-base-100/85 hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-colors"
+              @click="addArtistGenreRule"
+            >
+              <Icon icon="clarity:plus-line" class="h-4 w-4 mr-1" />
+              {{ t('organizer.addArtistGenreRule') }}
+            </button>
+          </div>
+
+          <!-- List -->
+          <div class="surface rounded-2xl overflow-hidden">
+            <div
+              v-if="artistGenreRules.length === 0"
+              class="p-8 text-center text-sm text-base-content/40"
+            >
+              No artist→genre rules yet. Add one above.
+            </div>
+            <ul v-else class="divide-y divide-white/5">
+              <li
+                v-for="(rule, idx) in artistGenreRules"
+                :key="idx"
+                class="flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
+              >
+                <span class="flex-1 text-sm font-mono text-base-content/80 truncate">
+                  *{{ rule.pattern }}*
+                </span>
+                <Icon icon="clarity:arrow-line" class="h-3.5 w-3.5 text-base-content/30 shrink-0" />
+                <span class="text-sm font-medium text-primary truncate flex-1">
+                  {{ rule.genre }}
+                </span>
+                <button
+                  class="icon-btn h-7 w-7 text-error/50 hover:text-error hover:bg-error/10 shrink-0"
+                  @click="removeArtistGenreRule(idx)"
+                  title="Remove rule"
+                >
+                  <Icon icon="clarity:times-line" class="h-3.5 w-3.5" />
+                </button>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════ -->
         <!-- GENRE RULES                                               -->
         <!-- ══════════════════════════════════════════════════════════ -->
         <section class="mb-10">
@@ -277,6 +351,7 @@ const isSaved = ref(false)
 
 const genreRules = ref([])
 const artistRules = ref([])
+const artistGenreRules = ref([])
 const availableFolders = ref([])
 
 const genreSearch = ref('')
@@ -287,6 +362,8 @@ const newKeyword = ref('')
 const newFolder = ref('')
 const newPattern = ref('')
 const newArtist = ref('')
+const newArtistPattern = ref('')
+const newArtistGenre = ref('')
 
 const filteredGenreRules = computed(() => {
   let rules = genreRules.value
@@ -315,7 +392,7 @@ watch([genreSearch, folderFilter], () => {
   genrePage.value = 1
 })
 
-watch([genreRules, artistRules], () => {
+watch([genreRules, artistRules, artistGenreRules], () => {
   isDirty.value = true
   isSaved.value = false
 }, { deep: true })
@@ -344,17 +421,37 @@ function folderBadgeClass(folder) {
 }
 
 function addGenreRule() {
-  const kw = newKeyword.value.trim().toLowerCase()
   const fl = newFolder.value.trim()
-  if (!kw || !fl) return
-  if (genreRules.value.some((r) => r.keyword === kw)) return
-  genreRules.value = [{ keyword: kw, folder: fl }, ...genreRules.value]
+  if (!fl) return
+  const keywords = newKeyword.value
+    .split(',')
+    .map((k) => k.trim().toLowerCase())
+    .filter(Boolean)
+  if (!keywords.length) return
+  const newRules = keywords
+    .filter((kw) => !genreRules.value.some((r) => r.keyword === kw))
+    .map((kw) => ({ keyword: kw, folder: fl }))
+  if (!newRules.length) return
+  genreRules.value = [...newRules, ...genreRules.value]
   if (!availableFolders.value.includes(fl)) {
     availableFolders.value = [...availableFolders.value, fl].sort()
   }
   newKeyword.value = ''
   newFolder.value = ''
   genrePage.value = 1
+}
+
+function addArtistGenreRule() {
+  const pat = newArtistPattern.value.trim()
+  const genre = newArtistGenre.value.trim()
+  if (!pat || !genre) return
+  artistGenreRules.value = [...artistGenreRules.value, { pattern: pat, genre }]
+  newArtistPattern.value = ''
+  newArtistGenre.value = ''
+}
+
+function removeArtistGenreRule(idx) {
+  artistGenreRules.value = artistGenreRules.value.filter((_, i) => i !== idx)
 }
 
 function removeGenreRule(rule) {
@@ -382,6 +479,7 @@ async function loadConfig() {
     const res = await API.getOrganizerConfig()
     genreRules.value = res.data.genre_rules || []
     artistRules.value = res.data.artist_rules || []
+    artistGenreRules.value = res.data.artist_genre_rules || []
     availableFolders.value = res.data.available_folders || []
     isDirty.value = false
   } catch (e) {
@@ -398,6 +496,7 @@ async function saveRules() {
     await API.saveOrganizerConfig({
       genre_rules: genreRules.value,
       artist_rules: artistRules.value,
+      artist_genre_rules: artistGenreRules.value,
     })
     saveResult.value = 'ok'
     isDirty.value = false

@@ -100,6 +100,13 @@ class PlaylistMonitorDB:
                 )
             except Exception:
                 pass
+            # Migration: add display_name column (human-readable song title)
+            try:
+                conn.execute(
+                    'ALTER TABLE downloaded_tracks ADD COLUMN display_name TEXT'
+                )
+            except Exception:
+                pass
             # Migration: make playlist_id nullable by rebuilding the table when
             # the old NOT NULL constraint is still in place.
             try:
@@ -249,6 +256,7 @@ class PlaylistMonitorDB:
         self,
         spotify_id: str,
         filename: Optional[str] = None,
+        display_name: Optional[str] = None,
     ) -> None:
         """Track a direct (non-playlist) download in the List of Truth."""
         with self._connect() as conn:
@@ -260,9 +268,9 @@ class PlaylistMonitorDB:
                 return
             conn.execute(
                 """INSERT OR IGNORE INTO downloaded_tracks
-                   (playlist_id, track_spotify_id, downloaded_at, filename)
-                   VALUES (NULL, ?, ?, ?)""",
-                (spotify_id, _now_iso(), filename),
+                   (playlist_id, track_spotify_id, downloaded_at, filename, display_name)
+                   VALUES (NULL, ?, ?, ?, ?)""",
+                (spotify_id, _now_iso(), filename, display_name),
             )
 
     def is_track_downloaded(self, spotify_id: str) -> bool:
@@ -287,9 +295,9 @@ class PlaylistMonitorDB:
                 pattern = f'%{search}%'
                 where = (
                     "WHERE dt.filename LIKE ? OR dt.track_spotify_id LIKE ?"
-                    " OR mp.name LIKE ?"
+                    " OR dt.display_name LIKE ? OR mp.name LIKE ?"
                 )
-                args: tuple = (pattern, pattern, pattern)
+                args: tuple = (pattern, pattern, pattern, pattern)
             else:
                 where = ""
                 args = ()
@@ -301,7 +309,8 @@ class PlaylistMonitorDB:
             ).fetchone()[0]
             rows = conn.execute(
                 f"""SELECT dt.id, dt.playlist_id, dt.track_spotify_id,
-                           dt.downloaded_at, dt.filename, mp.name as playlist_name
+                           dt.downloaded_at, dt.filename, dt.display_name,
+                           mp.name as playlist_name
                     FROM downloaded_tracks dt
                     LEFT JOIN monitored_playlists mp ON dt.playlist_id = mp.id
                     {where}
@@ -316,6 +325,7 @@ class PlaylistMonitorDB:
                 'track_spotify_id': r['track_spotify_id'],
                 'downloaded_at': r['downloaded_at'],
                 'filename': r['filename'],
+                'display_name': r['display_name'],
                 'playlist_name': r['playlist_name'],
             }
             for r in rows

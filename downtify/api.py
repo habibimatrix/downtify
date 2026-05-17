@@ -57,6 +57,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     'organize_by_artist': False,
     'genre_rules': None,        # None = use hardcoded defaults
     'artist_rules': [],
+    'artist_genre_rules': [],   # [{pattern, genre}] — highest-priority override
     'country_to_folder': None,  # None = use hardcoded defaults
 }
 
@@ -339,8 +340,16 @@ async def _run_download(
     if state.monitor_db is not None and filename:
         spotify_id = song.get('song_id') or song.get('spotify_id') or ''
         if spotify_id:
+            display_name = (
+                song.get('name')
+                or song.get('title')
+                or ''
+            )
             await asyncio.to_thread(
-                state.monitor_db.mark_direct_download, spotify_id, filename
+                state.monitor_db.mark_direct_download,
+                spotify_id,
+                filename,
+                display_name or None,
             )
 
     return filename
@@ -370,6 +379,19 @@ async def download_endpoint(
         song.get('year'),
         song.get('release_date'),
     )
+
+    # Re-download guard: reject if already in List of Truth
+    spotify_id = song.get('song_id') or song.get('spotify_id') or ''
+    if spotify_id and state.monitor_db is not None:
+        already = await asyncio.to_thread(
+            state.monitor_db.is_track_downloaded, spotify_id
+        )
+        if already:
+            raise HTTPException(
+                status_code=409,
+                detail='already_downloaded',
+            )
+
     song_id = _register_job(song, status='downloading')
 
     try:
@@ -660,6 +682,7 @@ def get_organizer_config() -> dict[str, Any]:
     if not country_to_folder:
         country_to_folder = DEFAULT_COUNTRY_TO_FOLDER
     artist_rules = state.settings.get('artist_rules') or []
+    artist_genre_rules = state.settings.get('artist_genre_rules') or []
     available_folders = sorted(set(
         r['folder'] for r in genre_rules
         if isinstance(r, dict) and r.get('folder')
@@ -667,6 +690,7 @@ def get_organizer_config() -> dict[str, Any]:
     return {
         'genre_rules': genre_rules,
         'artist_rules': artist_rules,
+        'artist_genre_rules': artist_genre_rules,
         'country_to_folder': country_to_folder,
         'available_folders': available_folders,
     }
@@ -684,6 +708,8 @@ async def save_organizer_config(request: Request) -> dict[str, Any]:
         state.settings['genre_rules'] = payload['genre_rules']
     if isinstance(payload.get('artist_rules'), list):
         state.settings['artist_rules'] = payload['artist_rules']
+    if isinstance(payload.get('artist_genre_rules'), list):
+        state.settings['artist_genre_rules'] = payload['artist_genre_rules']
     if isinstance(payload.get('country_to_folder'), dict):
         state.settings['country_to_folder'] = payload['country_to_folder']
 

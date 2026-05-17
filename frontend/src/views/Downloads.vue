@@ -96,7 +96,7 @@
           <!-- Info -->
           <div class="flex-1 min-w-0">
             <span class="text-sm font-medium truncate block">
-              {{ displayFilename(item.filename) || item.track_spotify_id }}
+              {{ displayFilename(item) }}
             </span>
             <span class="text-xs text-base-content/40 flex items-center gap-2 mt-0.5 flex-wrap">
               <span v-if="item.playlist_name" class="text-primary/70">
@@ -272,8 +272,10 @@ function showSuccess(msg) {
   }, 3000)
 }
 
-function displayFilename(filename) {
-  if (!filename) return ''
+function displayFilename(item) {
+  if (item.display_name) return item.display_name
+  const filename = item.filename
+  if (!filename) return item.track_spotify_id || ''
   const slash = filename.lastIndexOf('/')
   const name = slash >= 0 ? filename.slice(slash + 1) : filename
   const dot = name.lastIndexOf('.')
