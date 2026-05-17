@@ -35,7 +35,7 @@ from uvicorn import Config, Server
 from downtify import __version__, api
 from downtify.downloader import Downloader
 from downtify.monitor import PlaylistMonitorDB, monitor_loop
-from downtify.organizer_service import start_organizer, stop_organizer
+from downtify.organizer_service import start_organizer
 
 load_dotenv()
 
@@ -237,10 +237,9 @@ def build_app() -> FastAPI:
                 settings=api.state.settings,
             )
         )
-        
+
         # Organizer-Service starten (Auto-Organisation + Scanner-Ordner)
         start_organizer()
-        
 
     @app.get('/list')
     def list_downloads() -> list[str]:
