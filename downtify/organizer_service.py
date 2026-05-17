@@ -26,6 +26,12 @@ from typing import Optional
 
 import requests
 from mutagen import File as MutagenFile
+from mutagen.flac import FLAC
+from mutagen.id3 import COMM
+from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4
+from mutagen.oggopus import OggOpus
+from mutagen.oggvorbis import OggVorbis
 
 # ── Konfiguration ─────────────────────────────────────────────────────────────
 
@@ -894,6 +900,38 @@ def _read_tags(path: Path) -> dict:
     return result
 
 
+def _write_organizer_comment(path: Path, genre: str, artist: str, album: str, title: str) -> None:
+    """Write organizer-resolved metadata into the file's comment tag."""
+    comment = f"Genre: {genre} | Artist: {artist} | Album: {album} | Title: {title}"
+    ext = path.suffix.lower()
+    try:
+        if ext == ".mp3":
+            audio = MP3(str(path))
+            if audio.tags is None:
+                audio.add_tags()
+            audio.tags.add(COMM(encoding=3, lang='eng', desc='downtify', text=comment))
+            audio.save(v2_version=3)
+        elif ext in (".m4a", ".mp4", ".aac"):
+            audio = MP4(str(path))
+            audio["©cmt"] = comment
+            audio.save()
+        elif ext == ".flac":
+            audio = FLAC(str(path))
+            audio["comment"] = comment
+            audio.save()
+        elif ext == ".ogg":
+            audio = OggVorbis(str(path))
+            audio["comment"] = comment
+            audio.save()
+        elif ext == ".opus":
+            audio = OggOpus(str(path))
+            audio["comment"] = comment
+            audio.save()
+        log.info(f"  ✎ Kommentar geschrieben: {comment}")
+    except Exception as e:
+        log.warning(f"  Kommentar-Tag konnte nicht geschrieben werden: {e}")
+
+
 def _match_genre_rules(genres: list, rules: Optional[list] = None) -> Optional[str]:
     if not genres:
         return None
@@ -1492,6 +1530,9 @@ def process_file(
     except Exception as e:
         log.error(f"  ✗ Move fehlgeschlagen: {e}")
         return False
+
+    # Organizer-Metadaten als Kommentar in die Datei schreiben
+    _write_organizer_comment(target, genre, artist, album, title)
 
     # Downtify Monitor DB updaten → verhindert Re-Download
     _nullify_monitor_filename(path)
