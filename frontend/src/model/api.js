@@ -146,12 +146,12 @@ function listCacheTracks(search = '', limit = 50, offset = 0) {
   return API.get('/api/cache/tracks', { params: { search, limit, offset } })
 }
 
-function addCacheTrack(entry) {
-  return API.post('/api/cache/tracks', entry)
+function deleteArtistAlbum(artistNorm, album) {
+  return API.delete(`/api/cache/tracks/${encodeURIComponent(artistNorm)}/album`, { data: { album } })
 }
 
-function deleteCacheTrack(artistNorm, titleNorm) {
-  return API.delete(`/api/cache/tracks/${encodeURIComponent(artistNorm)}/${encodeURIComponent(titleNorm)}`)
+function deleteCacheTrack(artistNorm) {
+  return API.delete(`/api/cache/tracks/${encodeURIComponent(artistNorm)}`)
 }
 
 function clearAllCache() {
@@ -199,7 +199,7 @@ export default {
   getAudit,
   getCacheStats,
   listCacheTracks,
-  addCacheTrack,
+  deleteArtistAlbum,
   deleteCacheTrack,
   clearAllCache,
   discoverSoundcloudClientId,

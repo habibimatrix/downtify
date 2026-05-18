@@ -1052,6 +1052,15 @@ class OrganizerDB:
                     audit_json TEXT NOT NULL,
                     created_at INTEGER NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS artist_knowledge_cache (
+                    artist_norm      TEXT PRIMARY KEY,
+                    genre            TEXT NOT NULL DEFAULT '',
+                    albums_json      TEXT NOT NULL DEFAULT '[]',
+                    learned_at       INTEGER NOT NULL,
+                    genre_prev       TEXT,
+                    genre_updated_at INTEGER
+                );
             """)
             self.conn.commit()
 
@@ -1109,17 +1118,7 @@ class OrganizerDB:
             self.conn.commit()
 
     def get_track_cache(self, artist_norm: str, title_norm: str) -> Optional[dict]:
-        with self.lock:
-            row = self.conn.execute(
-                "SELECT final_meta_json, cached_at FROM track_metadata_cache WHERE artist_norm=? AND title_norm=?",
-                (artist_norm, title_norm),
-            ).fetchone()
-        if row is None:
-            return None
-        age_days = (time.time() - row[1]) / 86400
-        if age_days > 30:
-            return None
-        return json.loads(row[0])
+        return None
 
     def set_track_cache(self, artist_norm: str, title_norm: str, meta: dict) -> None:
         with self.lock:
@@ -1180,6 +1179,140 @@ class OrganizerDB:
             else:
                 row = self.conn.execute("SELECT COUNT(*) FROM track_metadata_cache").fetchone()
         return row[0] if row else 0
+
+    def get_artist_knowledge(self, artist_norm: str) -> Optional[dict]:
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT genre, albums_json, learned_at, genre_prev FROM artist_knowledge_cache WHERE artist_norm=?",
+                (artist_norm,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "genre": row[0],
+            "albums": json.loads(row[1] or "[]"),
+            "learned_at": row[2],
+            "genre_prev": row[3],
+        }
+
+    def set_artist_knowledge_genre(self, artist_norm: str, genre: str) -> Optional[str]:
+        """Update genre for artist. Returns previous genre if it changed, else None."""
+        if not artist_norm or not genre:
+            return None
+        now = int(time.time())
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT genre FROM artist_knowledge_cache WHERE artist_norm=?",
+                (artist_norm,),
+            ).fetchone()
+            if row is None:
+                self.conn.execute(
+                    "INSERT INTO artist_knowledge_cache (artist_norm, genre, albums_json, learned_at) VALUES (?, ?, '[]', ?)",
+                    (artist_norm, genre, now),
+                )
+                self.conn.commit()
+                return None
+            old_genre = row[0]
+            if old_genre == genre:
+                return None
+            self.conn.execute(
+                "UPDATE artist_knowledge_cache SET genre=?, genre_prev=?, genre_updated_at=? WHERE artist_norm=?",
+                (genre, old_genre, now, artist_norm),
+            )
+            self.conn.commit()
+            return old_genre
+
+    def add_artist_album(self, artist_norm: str, album: str) -> bool:
+        """Append album to artist's known albums. Returns True if newly added."""
+        if not artist_norm or not album or album in ("Unbekannt", "Unknown"):
+            return False
+        now = int(time.time())
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT albums_json FROM artist_knowledge_cache WHERE artist_norm=?",
+                (artist_norm,),
+            ).fetchone()
+            if row is None:
+                self.conn.execute(
+                    "INSERT INTO artist_knowledge_cache (artist_norm, genre, albums_json, learned_at) VALUES (?, '', ?, ?)",
+                    (artist_norm, json.dumps([album]), now),
+                )
+                self.conn.commit()
+                return True
+            albums = json.loads(row[0] or "[]")
+            if album in albums:
+                return False
+            albums.append(album)
+            self.conn.execute(
+                "UPDATE artist_knowledge_cache SET albums_json=? WHERE artist_norm=?",
+                (json.dumps(albums), artist_norm),
+            )
+            self.conn.commit()
+            return True
+
+    def remove_artist_album(self, artist_norm: str, album: str) -> None:
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT albums_json FROM artist_knowledge_cache WHERE artist_norm=?",
+                (artist_norm,),
+            ).fetchone()
+            if row is None:
+                return
+            albums = [a for a in json.loads(row[0] or "[]") if a != album]
+            self.conn.execute(
+                "UPDATE artist_knowledge_cache SET albums_json=? WHERE artist_norm=?",
+                (json.dumps(albums), artist_norm),
+            )
+            self.conn.commit()
+
+    def delete_artist_knowledge(self, artist_norm: str) -> None:
+        with self.lock:
+            self.conn.execute("DELETE FROM artist_knowledge_cache WHERE artist_norm=?", (artist_norm,))
+            self.conn.commit()
+
+    def list_artist_knowledge(self, search: str = "", limit: int = 50, offset: int = 0) -> list:
+        with self.lock:
+            if search:
+                rows = self.conn.execute(
+                    """SELECT artist_norm, genre, albums_json, learned_at, genre_prev
+                       FROM artist_knowledge_cache
+                       WHERE artist_norm LIKE ?
+                       ORDER BY artist_norm ASC LIMIT ? OFFSET ?""",
+                    (f"%{search}%", limit, offset),
+                ).fetchall()
+            else:
+                rows = self.conn.execute(
+                    """SELECT artist_norm, genre, albums_json, learned_at, genre_prev
+                       FROM artist_knowledge_cache
+                       ORDER BY artist_norm ASC LIMIT ? OFFSET ?""",
+                    (limit, offset),
+                ).fetchall()
+        result = []
+        for artist_norm, genre, albums_json, learned_at, genre_prev in rows:
+            result.append({
+                "artist_norm": artist_norm,
+                "genre": genre,
+                "albums": json.loads(albums_json or "[]"),
+                "learned_at": learned_at,
+                "genre_prev": genre_prev,
+            })
+        return result
+
+    def count_artist_knowledge(self, search: str = "") -> int:
+        with self.lock:
+            if search:
+                row = self.conn.execute(
+                    "SELECT COUNT(*) FROM artist_knowledge_cache WHERE artist_norm LIKE ?",
+                    (f"%{search}%",),
+                ).fetchone()
+            else:
+                row = self.conn.execute("SELECT COUNT(*) FROM artist_knowledge_cache").fetchone()
+        return row[0] if row else 0
+
+    def clear_artist_knowledge(self) -> None:
+        with self.lock:
+            self.conn.execute("DELETE FROM artist_knowledge_cache")
+            self.conn.commit()
 
     def save_audit(self, track_id: str, audit_json: str) -> None:
         with self.lock:
@@ -1868,6 +2001,15 @@ def _fuzzy_similar(a: str, b: str, threshold: float = 0.75) -> bool:
     return shorter in longer and len(shorter) / len(longer) >= threshold
 
 
+def _fuzzy_ratio(a: str, b: str) -> float:
+    import difflib
+    a2 = _norm_voter(a)
+    b2 = _norm_voter(b)
+    if not a2 or not b2:
+        return 0.0
+    return difflib.SequenceMatcher(None, a2, b2).ratio()
+
+
 # ── MetadataVoter ─────────────────────────────────────────────────────────────
 
 class MetadataVoter:
@@ -1926,36 +2068,52 @@ class MetadataVoter:
         if not artist or not title_raw:
             return self._fallback(tags, orig)
 
-        # Schritt 0.5: Cache-Lookup
+        # Schritt 0.5: Artist-Knowledge-Cache Lookup
         ak = _norm_voter(artist)
-        tk = _norm_voter(title_raw)
-        cached = self.db.get_track_cache(ak, tk)
-        if cached:
-            genre_raw = cached.get("genre_raw", "")
-            country = cached.get("country")
-            mb_tags_list: list = cached.get("mb_tags", [])
-            final_genre = self.resolver.apply_rules_only(
-                artist, title_raw, [genre_raw] if genre_raw else [], country, mb_tags_list
-            )
-            result = {**cached, "genre": final_genre, "cache_hit": True, "meta_source": "Cache (Schritt 0.5)"}
-            result.update(orig)
-            if final_genre != cached.get("genre"):
-                self.db.set_track_cache(ak, tk, {**cached, "genre": final_genre})
-            self._log_step("0.5", "Cache-Hit", action="Schritte 1-10 übersprungen", values={
-                "genre": final_genre,
-                "artist": cached.get("artist", ""),
-                "album": cached.get("album", ""),
-                "title": cached.get("title", ""),
-            })
-            self._save_audit(track_id, {"steps": self.audit_log, "cache": {"action": "hit"}})
-            return result
+        known = self.db.get_artist_knowledge(ak) if ak else None
+        genre_from_cache = known["genre"] if known else ""
+        albums_from_cache = known.get("albums", []) if known else []
 
-        # Schritt 1: Alle Quellen parallel befragen
-        # Spotify-Downloads: artist/album/title bereits bekannt → nur Genre voten
+        self._log_step("0.5", "Artist-Knowledge-Cache", hit=bool(known),
+                       genre=genre_from_cache, albums=albums_from_cache, action="lookup")
+
+        # Wenn Spotify-ID bekannt UND Genre im Cache → Schritte 1-9 komplett überspringen
         spotify_sourced = bool(
             tags.get("spotify_id")
             and not str(tags["spotify_id"]).startswith(("scanner:", "pfad:"))
         )
+        if spotify_sourced and genre_from_cache:
+            result_fields_fast = {
+                "genre": genre_from_cache,
+                "artist": tags.get("artist", ""),
+                "album": tags.get("album", ""),
+                "title": tags.get("title", "") or path.stem,
+            }
+            country_fast = self.db.get_cached_country(artist)
+            final_genre_fast = self.resolver.apply_rules_only(
+                result_fields_fast["artist"], result_fields_fast["title"],
+                [genre_from_cache], country_fast, [],
+            )
+            result_fields_fast["genre"] = final_genre_fast
+            old_genre_fast = self.db.set_artist_knowledge_genre(ak, final_genre_fast)
+            album_new_fast = self.db.add_artist_album(ak, result_fields_fast.get("album", ""))
+            self._log_step("0.5", "Artist-Knowledge-Cache",
+                           action="vollständiger Skip (Spotify-ID + Genre bekannt)", skipped_steps="1-9",
+                           hit=True, genre=genre_from_cache, albums=albums_from_cache)
+            self._log_step(12, "Artist-Cache aktualisiert",
+                           genre_overwritten=bool(old_genre_fast and old_genre_fast != final_genre_fast),
+                           genre_prev=old_genre_fast, album_new=album_new_fast,
+                           album=result_fields_fast.get("album"), genre=final_genre_fast)
+            output_fast = {**result_fields_fast, "meta_source": "Artist-Cache + Spotify (Schritt 0.5)",
+                           "cache_hit": True}
+            output_fast.update(orig)
+            self._save_audit(track_id, {"steps": self.audit_log,
+                                        "cache": {"action": "artist_cache_hit", "spotify_sourced": True}})
+            return output_fast
+
+        # Schritt 1: Alle Quellen parallel befragen
+        # Spotify-Downloads: artist/album/title bereits bekannt → nur Genre voten
+        # Wenn Genre aus Artist-Cache bekannt → Genre-Voting mit Cache-Wert vorbelegen
         sources = self._step1_query_sources(artist, title_raw, tags, spotify_sourced=spotify_sourced)
         self._log_step(1, "6 Quellen befragt", sources=sources, spotify_sourced=spotify_sourced)
 
@@ -1963,10 +2121,32 @@ class MetadataVoter:
         ergebnis1, status1, counts = self._step2_4_vote(sources)
         self._log_step(2, "Voting", counts=counts, ergebnis1=ergebnis1, status1=status1)
 
+        # Genre aus Artist-Cache übernehmen (überschreibt Voting-Ergebnis)
+        if genre_from_cache:
+            ergebnis1["genre"] = genre_from_cache
+            status1["genre"] = "abgeschlossen"
+
         # Schritt 5: Abgeschlossene Felder
         result_fields = {k: v for k, v in ergebnis1.items() if status1.get(k) == "abgeschlossen"}
         open1 = [k for k in self.FIELDS if status1.get(k) != "abgeschlossen"]
         self._log_step(5, "Status 1", written=list(result_fields.keys()), open=open1)
+
+        # Schritt 4.5: Album-Fuzzy mit Artist-Cache
+        if albums_from_cache and status1.get("album") in ("mittel", "niedrig", "offen", None):
+            album_vote = ergebnis1.get("album", "")
+            if album_vote:
+                best_match = None
+                best_score = 0.0
+                for cached_album in albums_from_cache:
+                    score = _fuzzy_ratio(album_vote, cached_album)
+                    if score > best_score:
+                        best_score = score
+                        best_match = cached_album
+                if best_match and best_score >= 0.80:
+                    ergebnis1["album"] = best_match
+                    status1["album"] = "abgeschlossen"
+                    self._log_step("4.5", "Album via Artist-Cache",
+                                   matched=best_match, original=album_vote, score=round(best_score, 2))
 
         country = None
         mb_tags_list = []
@@ -2022,23 +2202,22 @@ class MetadataVoter:
         result_fields["genre"] = final_genre
         self._log_step(11, "Organizer-Rules", rules_applied=rule_changes)
 
-        # Schritt 12: Cache schreiben
-        cache_entry: dict = {
-            **result_fields,
-            "genre_raw": genre_raw,
-            "country": country,
-            "mb_tags": mb_tags_list[:5],
-        }
-        self.db.set_track_cache(ak, tk, cache_entry)
-        if genre_raw:
-            self.db.cache_genres(artist, [genre_raw])
-        self._log_step(None, "Cache", action="written", key=f"{ak}::{tk}")
+        # Schritt 12: Artist-Knowledge-Cache aktualisieren
+        old_genre = self.db.set_artist_knowledge_genre(ak, final_genre)
+        album_new = self.db.add_artist_album(ak, result_fields.get("album", ""))
+        genre_overwritten = bool(old_genre and old_genre != final_genre)
+        self._log_step(12, "Artist-Cache aktualisiert",
+                       genre_overwritten=genre_overwritten,
+                       genre_prev=old_genre if genre_overwritten else None,
+                       album_new=album_new,
+                       album=result_fields.get("album"),
+                       genre=final_genre)
 
         output: dict = {**result_fields, "meta_source": meta_source, "cache_hit": False}
         output.update(orig)
         self._save_audit(track_id, {
             "steps": self.audit_log,
-            "cache": {"action": "written", "key": f"{ak}::{tk}", "ttl_days": 30},
+            "cache": {"action": "written"},
         })
         return output
 

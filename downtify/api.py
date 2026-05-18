@@ -765,7 +765,7 @@ def get_cache_stats() -> dict[str, Any]:
     svc = get_organizer()
     if svc is None:
         return {'count': 0}
-    count = svc.db.count_track_cache()
+    count = svc.db.count_artist_knowledge()
     return {'count': count}
 
 
@@ -778,33 +778,9 @@ def list_cache_tracks(
     svc = get_organizer()
     if svc is None:
         return {'items': [], 'total': 0}
-    items = svc.db.list_track_cache(search=search, limit=limit, offset=offset)
-    total = svc.db.count_track_cache(search=search)
+    items = svc.db.list_artist_knowledge(search=search, limit=limit, offset=offset)
+    total = svc.db.count_artist_knowledge(search=search)
     return {'items': items, 'total': total}
-
-
-@router.post('/api/cache/tracks')
-async def add_cache_track(request: Request) -> dict[str, Any]:
-    svc = get_organizer()
-    if svc is None:
-        raise HTTPException(status_code=503, detail='Organizer not running')
-    try:
-        payload = await request.json()
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail='Invalid JSON') from exc
-    artist_norm = re.sub(r'[^a-z0-9]', '', (payload.get('artist') or '').lower())
-    title_norm = re.sub(r'[^a-z0-9]', '', (payload.get('title') or '').lower())
-    if not artist_norm or not title_norm:
-        raise HTTPException(status_code=400, detail='artist and title required')
-    meta = {
-        'genre': payload.get('genre', ''),
-        'artist': payload.get('artist', ''),
-        'album': payload.get('album', ''),
-        'title': payload.get('title', ''),
-        'genre_raw': payload.get('genre', ''),
-    }
-    svc.db.set_track_cache(artist_norm, title_norm, meta)
-    return {'saved': True, 'artist_norm': artist_norm, 'title_norm': title_norm}
 
 
 @router.delete('/api/cache/tracks')
@@ -812,16 +788,32 @@ def delete_all_cache() -> dict[str, Any]:
     svc = get_organizer()
     if svc is None:
         raise HTTPException(status_code=503, detail='Organizer not running')
-    svc.db.clear_track_cache()
+    svc.db.clear_artist_knowledge()
     return {'deleted': True}
 
 
-@router.delete('/api/cache/tracks/{artist_norm}/{title_norm}')
-def delete_cache_track(artist_norm: str, title_norm: str) -> dict[str, Any]:
+@router.delete('/api/cache/tracks/{artist_norm}/album')
+async def delete_artist_album(artist_norm: str, request: Request) -> dict[str, Any]:
     svc = get_organizer()
     if svc is None:
         raise HTTPException(status_code=503, detail='Organizer not running')
-    svc.db.delete_track_cache(artist_norm, title_norm)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Invalid JSON') from exc
+    album = payload.get('album', '')
+    if not album:
+        raise HTTPException(status_code=400, detail='album required')
+    svc.db.remove_artist_album(artist_norm, album)
+    return {'deleted': True}
+
+
+@router.delete('/api/cache/tracks/{artist_norm}')
+def delete_cache_track(artist_norm: str) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    svc.db.delete_artist_knowledge(artist_norm)
     return {'deleted': True}
 
 

@@ -411,7 +411,7 @@ onUnmounted(() => {
   border-radius: 9999px;
   outline: none;
 }
-[data-theme='downtify-light'] .player-range {
+[data-theme='downtiplx-light'] .player-range {
   background: rgba(0, 0, 0, 0.1);
 }
 .player-range::-webkit-slider-thumb {

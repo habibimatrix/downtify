@@ -467,28 +467,6 @@
                 class="btn btn-xs btn-ghost text-error/60 hover:text-error h-8 px-3"
                 @click="clearCache"
               >{{ t('organizer.cacheClearAll') }}</button>
-              <button
-                class="btn btn-xs btn-ghost h-8 px-3"
-                @click="showAddCache = !showAddCache"
-              >
-                <Icon icon="clarity:plus-line" class="h-3.5 w-3.5 mr-1" />
-                {{ t('organizer.cacheAdd') }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Add cache entry form -->
-          <div v-if="showAddCache" class="px-5 py-3 border-b border-base-content/8 bg-warning/5 space-y-2">
-            <p class="text-xs font-medium text-warning">{{ t('organizer.cacheAddTitle') }}</p>
-            <div class="grid grid-cols-2 gap-2">
-              <input v-model="newCache.artist" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheArtist')" />
-              <input v-model="newCache.title" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheTitle')" />
-              <input v-model="newCache.genre" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheGenre')" />
-              <input v-model="newCache.album" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheAlbum')" />
-            </div>
-            <div class="flex gap-2 justify-end">
-              <button class="btn btn-xs btn-ghost h-8" @click="showAddCache = false">Cancel</button>
-              <button class="btn btn-xs btn-primary h-8 px-4" @click="addCacheEntry" :disabled="!newCache.artist || !newCache.title">Save</button>
             </div>
           </div>
 
@@ -515,23 +493,32 @@
           <ul v-else-if="cacheItems.length" class="divide-y divide-base-content/5">
             <li
               v-for="item in cacheItems"
-              :key="item.artist_norm + item.title_norm"
-              class="flex items-center gap-3 px-5 py-2.5 hover:bg-base-content/3 group"
+              :key="item.artist_norm"
+              class="flex items-start gap-3 px-5 py-3 hover:bg-base-content/3 group"
             >
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium truncate">{{ item.artist }}</span>
-                  <span class="text-xs text-base-content/40">—</span>
-                  <span class="text-sm truncate text-base-content/70">{{ item.title }}</span>
+                  <span class="text-sm font-medium">{{ item.artist_norm }}</span>
+                  <span v-if="item.genre" class="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-medium">{{ item.genre }}</span>
+                  <span class="text-[10px] text-base-content/25">{{ new Date(item.learned_at * 1000).toLocaleDateString() }}</span>
                 </div>
-                <div class="flex gap-1.5 mt-0.5 flex-wrap">
-                  <span v-if="item.genre" class="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">{{ item.genre }}</span>
-                  <span v-if="item.album" class="text-[10px] px-1.5 py-0.5 rounded-md bg-base-content/8 text-base-content/50 italic">{{ item.album }}</span>
-                  <span class="text-[10px] text-base-content/25">{{ new Date(item.cached_at * 1000).toLocaleDateString() }}</span>
+                <div class="flex gap-1 mt-1.5 flex-wrap">
+                  <span
+                    v-for="album in item.albums"
+                    :key="album"
+                    class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-base-content/8 text-base-content/60"
+                  >
+                    {{ album }}
+                    <button
+                      class="text-base-content/30 hover:text-error transition-colors ml-0.5"
+                      @click.stop="removeAlbum(item, album)"
+                    >×</button>
+                  </span>
+                  <span v-if="!item.albums?.length" class="text-[10px] text-base-content/25 italic">{{ t('organizer.cacheAlbums') }}: —</span>
                 </div>
               </div>
               <button
-                class="icon-btn h-7 w-7 text-error/40 hover:text-error hover:bg-error/10 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                class="icon-btn h-7 w-7 text-error/40 hover:text-error hover:bg-error/10 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5"
                 @click="deleteCacheEntry(item)"
               >
                 <Icon icon="clarity:trash-line" class="h-3.5 w-3.5" />
@@ -732,8 +719,6 @@ const cachePage = ref(1)
 const cachePageSize = 20
 const cacheLoading = ref(false)
 const cacheMsg = ref('')
-const showAddCache = ref(false)
-const newCache = ref({ artist: '', title: '', genre: '', album: '' })
 
 async function loadCache() {
   cacheLoading.value = true
@@ -751,9 +736,18 @@ async function loadCache() {
 
 async function deleteCacheEntry(item) {
   try {
-    await API.deleteCacheTrack(item.artist_norm, item.title_norm)
+    await API.deleteCacheTrack(item.artist_norm)
     cacheMsg.value = t('organizer.cacheDeleted')
     loadCache()
+  } catch {}
+  setTimeout(() => { cacheMsg.value = '' }, 3000)
+}
+
+async function removeAlbum(item, album) {
+  try {
+    await API.deleteArtistAlbum(item.artist_norm, album)
+    item.albums = item.albums.filter((a) => a !== album)
+    cacheMsg.value = t('organizer.cacheDeleted')
   } catch {}
   setTimeout(() => { cacheMsg.value = '' }, 3000)
 }
@@ -763,18 +757,6 @@ async function clearCache() {
   try {
     await API.clearAllCache()
     cacheMsg.value = t('organizer.cacheClearedAll')
-    loadCache()
-  } catch {}
-  setTimeout(() => { cacheMsg.value = '' }, 3000)
-}
-
-async function addCacheEntry() {
-  if (!newCache.value.artist || !newCache.value.title) return
-  try {
-    await API.addCacheTrack(newCache.value)
-    cacheMsg.value = t('organizer.cacheSaved')
-    newCache.value = { artist: '', title: '', genre: '', album: '' }
-    showAddCache.value = false
     loadCache()
   } catch {}
   setTimeout(() => { cacheMsg.value = '' }, 3000)

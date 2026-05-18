@@ -131,8 +131,8 @@ import SearchInput from './SearchInput.vue'
 
 const route = useRoute()
 const themeMgr = useBinaryThemeManager({
-  newLightAlias: 'downtify-light',
-  newDarkAlias: 'downtify-dark',
+  newLightAlias: 'downtiplx-light',
+  newDarkAlias: 'downtiplx-dark',
 })
 const pt = useProgressTracker()
 const sm = useSearchManager()

@@ -28,6 +28,11 @@
 
       <!-- Steps -->
       <div v-else-if="audit" class="flex-1 overflow-y-auto p-4 space-y-2">
+        <!-- Spotify-ID banner -->
+        <div v-if="audit.cache?.spotify_sourced" class="flex items-center gap-2 rounded-xl bg-info/10 border border-info/20 px-3 py-2 mb-1">
+          <Icon icon="clarity:bolt-line" class="h-3.5 w-3.5 text-info shrink-0" />
+          <span class="text-[11px] text-info">Spotify-Download: Artist / Album / Title direkt übernommen · Schritte 1–9 übersprungen</span>
+        </div>
         <div
           v-for="step in audit.steps"
           :key="step.step ?? step.name"
@@ -77,18 +82,27 @@
             v-if="expandedSteps.has(step.step ?? step.name)"
             class="px-3 pb-3 pt-1 border-t border-base-content/8 bg-base-content/2"
           >
-            <!-- Step 0.5: Cache-Hit -->
+            <!-- Step 0.5: Artist-Knowledge-Cache -->
             <div v-if="step.step === '0.5'" class="space-y-2">
-              <p class="text-[11px] text-success flex items-center gap-1.5">
-                <Icon icon="clarity:storage-line" class="h-3.5 w-3.5" />
-                {{ t('audit.cacheHit') }}
-              </p>
-              <div v-if="step.values" class="grid grid-cols-2 gap-1.5">
-                <div v-for="(val, key) in step.values" :key="key" class="flex items-center gap-1.5 text-[11px]">
-                  <span class="text-base-content/40 capitalize w-12 shrink-0">{{ key }}</span>
-                  <span class="text-base-content/70 font-medium truncate">{{ val || '—' }}</span>
+              <div v-if="step.action?.includes('vollständiger Skip')" class="flex items-center gap-1.5">
+                <Icon icon="clarity:bolt-line" class="h-3.5 w-3.5 text-warning" />
+                <span class="text-[11px] text-warning font-medium">{{ t('audit.cacheSkipped') }}</span>
+              </div>
+              <div v-if="step.hit" class="space-y-1">
+                <div class="flex items-center gap-1.5 text-[11px]">
+                  <Icon icon="clarity:storage-line" class="h-3.5 w-3.5 text-primary" />
+                  <span class="text-base-content/40 w-12 shrink-0">Genre</span>
+                  <span class="text-primary font-medium">{{ step.genre || '—' }}</span>
+                </div>
+                <div v-if="step.albums?.length" class="flex items-start gap-1.5 text-[11px]">
+                  <span class="text-base-content/40 w-12 shrink-0 mt-0.5">Alben</span>
+                  <span class="text-base-content/60 flex-1">{{ step.albums.join(', ') }}</span>
                 </div>
               </div>
+              <p v-else class="text-[11px] text-base-content/40 flex items-center gap-1.5">
+                <Icon icon="clarity:search-line" class="h-3.5 w-3.5" />
+                Artist nicht bekannt — vollständiges Voting läuft
+              </p>
             </div>
 
             <!-- Step 0: Tag values -->
@@ -196,7 +210,41 @@
               <p v-else class="text-[11px] text-base-content/40">{{ t('audit.noRulesApplied') }}</p>
             </div>
 
-            <!-- Cache step -->
+            <!-- Step 4.5: Album fuzzy match -->
+            <div v-else-if="step.step === '4.5'" class="space-y-1">
+              <p class="text-[11px] text-primary flex items-center gap-1.5">
+                <Icon icon="clarity:storage-line" class="h-3.5 w-3.5" />
+                {{ t('audit.cacheAlbumFuzzy') }}
+              </p>
+              <div class="flex items-center gap-2 text-[11px]">
+                <span class="text-base-content/50 line-through">{{ step.original }}</span>
+                <Icon icon="clarity:arrow-line" class="h-3 w-3 text-primary" />
+                <span class="text-primary font-medium">{{ step.matched }}</span>
+                <span class="text-base-content/30">({{ Math.round((step.score || 0) * 100) }}%)</span>
+              </div>
+            </div>
+
+            <!-- Step 12: Artist-Cache write -->
+            <div v-else-if="step.step === 12" class="space-y-1.5">
+              <div v-if="step.genre_overwritten" class="flex items-center gap-1.5 text-[11px]">
+                <Icon icon="clarity:warning-line" class="h-3.5 w-3.5 text-warning" />
+                <span class="text-warning">{{ t('audit.cacheGenreOverwritten') }}:</span>
+                <span class="text-base-content/50 line-through">{{ step.genre_prev }}</span>
+                <Icon icon="clarity:arrow-line" class="h-3 w-3 text-warning" />
+                <span class="text-warning font-medium">{{ step.genre }}</span>
+              </div>
+              <div v-if="step.album_new" class="flex items-center gap-1.5 text-[11px]">
+                <Icon icon="clarity:plus-circle-line" class="h-3.5 w-3.5 text-success" />
+                <span class="text-success">{{ t('audit.cacheAlbumLearned') }}:</span>
+                <span class="font-medium">{{ step.album }}</span>
+              </div>
+              <div v-if="!step.genre_overwritten && !step.album_new" class="flex items-center gap-1.5 text-[11px]">
+                <Icon icon="clarity:check-circle-line" class="h-3.5 w-3.5 text-success" />
+                <span class="text-success">{{ t('audit.cacheWritten') }}</span>
+              </div>
+            </div>
+
+            <!-- Cache step (legacy) -->
             <div v-else-if="step.name === 'Cache' || step.name === 'Cache-Hit'" class="flex items-center gap-2">
               <Icon icon="clarity:storage-line" class="h-4 w-4" :class="step.action === 'hit' ? 'text-success' : 'text-primary'" />
               <span class="text-xs">{{ step.action === 'hit' ? t('audit.cacheHit') : t('audit.cacheWritten') }}</span>
@@ -213,12 +261,12 @@
           <Icon
             icon="clarity:storage-line"
             class="h-4 w-4 shrink-0"
-            :class="audit.cache.action === 'hit' ? 'text-success' : 'text-primary'"
+            :class="audit.cache.action?.includes('hit') ? 'text-primary' : 'text-success'"
           />
           <span class="text-xs flex-1">
             <span class="font-medium">{{ t('audit.cache') }}:</span>
-            {{ audit.cache.action === 'hit' ? t('audit.cacheHit') : t('audit.cacheWritten') }}
-            <span v-if="audit.cache.ttl_days" class="text-base-content/40 ml-1">(TTL {{ audit.cache.ttl_days }}d)</span>
+            {{ audit.cache.action?.includes('hit') ? t('audit.cacheHit') : t('audit.cacheWritten') }}
+            <span v-if="audit.cache.spotify_sourced" class="text-info ml-1">· Spotify-ID</span>
           </span>
         </div>
       </div>
@@ -266,9 +314,10 @@ watch(
     try {
       const res = await API.getAudit(props.trackId)
       audit.value = res.data
-      // Auto-expand first few steps
-      const hasCacheHit = res.data.steps?.some((s) => s.step === '0.5')
-      const autoExpand = hasCacheHit ? ['0.5', 11] : [0, 1, 2, 11]
+      // Auto-expand key steps
+      const hasArtistCache = res.data.steps?.some((s) => s.step === '0.5' && s.hit)
+      const hasFullSkip = res.data.cache?.spotify_sourced
+      const autoExpand = hasFullSkip ? ['0.5', 12] : hasArtistCache ? ['0.5', 11, 12] : [0, 1, 2, 11]
       expandedSteps.value = new Set(autoExpand)
     } catch {
       error.value = t('audit.noData')
@@ -291,7 +340,10 @@ function stepLabel(step) {
 }
 
 function stepBadgeClass(step) {
-  if (step.step === '0.5' || step.name === 'Cache-Hit') return 'bg-success/15 text-success'
+  if (step.step === '0.5') return step.hit ? 'bg-primary/15 text-primary' : 'bg-base-content/10 text-base-content/40'
+  if (step.step === '4.5') return 'bg-primary/15 text-primary'
+  if (step.step === 12) return step.genre_overwritten ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'
+  if (step.name === 'Cache-Hit') return 'bg-success/15 text-success'
   if (step.name === 'Cache') return 'bg-primary/15 text-primary'
   if (step.step === 11) return 'bg-warning/15 text-warning'
   if (step.step === 0) return 'bg-base-content/10 text-base-content/50'

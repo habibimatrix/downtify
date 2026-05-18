@@ -89,8 +89,8 @@ import { useProgressTracker } from '../model/download'
 import { useI18n } from '../i18n'
 
 const themeMgr = useBinaryThemeManager({
-  newLightAlias: 'downtify-light',
-  newDarkAlias: 'downtify-dark',
+  newLightAlias: 'downtiplx-light',
+  newDarkAlias: 'downtiplx-dark',
 })
 const pt = useProgressTracker()
 const { t } = useI18n()

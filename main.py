@@ -185,7 +185,7 @@ def build_app() -> FastAPI:
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(
-        title='Downtify',
+        title='Downtiplx',
         description=(
             'Download your Spotify playlists and songs along with album '
             'art and metadata in a self-hosted way via Docker.'

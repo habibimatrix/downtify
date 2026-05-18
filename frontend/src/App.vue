@@ -18,8 +18,8 @@ import { useBinaryThemeManager } from './model/theme'
 
 const themeMgr = useBinaryThemeManager()
 onBeforeMount(() => {
-  themeMgr.setLightAlias('downtify-light')
-  themeMgr.setDarkAlias('downtify-dark')
+  themeMgr.setLightAlias('downtiplx-light')
+  themeMgr.setDarkAlias('downtiplx-dark')
 })
 </script>
 
