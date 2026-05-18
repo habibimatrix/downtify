@@ -1,25 +1,44 @@
-# Downtiplx
+<div align="center">
 
-Self-hosted music downloader and organizer. Download Spotify tracks, albums, and playlists as high-quality audio files, then let the pipeline sort, tag, and file everything automatically.
+<a href="https://github.com/henriquesebastiao/downtify">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/628d4334-7326-446e-9f2a-4d3ab4fc95c3">
+    <img width="90" src="https://github.com/user-attachments/assets/628d4334-7326-446e-9f2a-4d3ab4fc95c3" alt="Downtiplx Logo">
+  </picture>
+</a>
+
+<h1>
+  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=32&pause=99999&color=E5A00D&center=true&vCenter=true&width=300&height=48&lines=Downtiplx" alt="Downtiplx" />
+</h1>
+
+[![Fork of](https://img.shields.io/badge/fork%20of-henriquesebastiao%2Fdowntify-E5A00D?style=flat-square&logo=github&logoColor=1a0e00)](https://github.com/henriquesebastiao/downtify)
+[![License](https://img.shields.io/badge/license-GPL--3.0-CC7B19?style=flat-square)](LICENSE)
+[![Plex](https://img.shields.io/badge/Plex%20compatible-folder%20structure-E5A00D?style=flat-square&logo=plex&logoColor=1a0e00)](https://www.plex.tv)
+
+</div>
 
 ---
 
-## Features
+> **Fork** of [henriquesebastiao/downtify](https://github.com/henriquesebastiao/downtify) — all credit for the original project and its web interface goes to [@henriquesebastiao](https://github.com/henriquesebastiao).
+>
+> This fork uses the Downtify UI as a **managed console**: it keeps the familiar download interface but adds a fully automated organisation layer on top — every downloaded or scanned track is fingerprinted, tagged via a multi-source voting pipeline, and filed into a clean `Genre/Artist/Album/` folder structure that Plex Media Server can pick up directly without any manual intervention.
 
-- **Spotify & SoundCloud downloads** — tracks, albums, playlists via yt-dlp
-- **11-step metadata voting pipeline** — 6 sources (Spotify, Deezer, Last.fm, MusicBrainz, SoundCloud, Discogs) vote on genre, artist, album, and title; best-of consensus wins
-- **Artist Knowledge Cache** — after the first song, each artist's genre and albums are remembered; subsequent songs skip all API calls for genre
-- **Organizer rules** — keyword→genre map, artist→genre overrides, country-based genre rules, artist alias normalization, custom separator tokens
-- **Fingerprint recognition** — AcoustID + AudD cascade identifies untagged or wrongly tagged files
-- **Audit trail** — per-track pipeline trace shows every step, every API result, every voting decision
-- **Scanner directory** — drop any audio file into `/scanner` and it gets identified, tagged, and filed
-- **Download watcher** — automatically processes files arriving in `/downloads`
-- **Playlist Monitor** — watch Spotify playlists; new tracks download automatically on schedule
-- **M3U export** — generates `.m3u` playlist files alongside downloaded tracks
-- **Cache editor** — GUI to view, search, and clean artist knowledge cache entries
-- **Web player** — in-browser playback of your library with queue support
-- **Authentication** — optional password protection for the web UI
-- **Dark / light theme** — Plex-gold color scheme
+---
+
+## What Downtiplx adds to the original
+
+| Feature | Description |
+|---|---|
+| **Automated folder structure** | Every track lands in `Genre/Artist/Album/` — Plex-compatible out of the box. No manual sorting needed. |
+| **11-step metadata voting pipeline** | 6 sources (Spotify, Deezer, Last.fm, MusicBrainz, SoundCloud, Discogs) vote on genre, artist, album, and title so the best metadata wins. |
+| **Artist Knowledge Cache** | After the first song by any artist, genre and albums are remembered. Subsequent songs skip all API calls. |
+| **Organizer rules GUI** | Manage genre keywords, artist→genre overrides, country rules, and artist aliases directly in the web UI. |
+| **Fingerprint recognition** | AcoustID + AudD identify untagged or wrongly tagged files dropped into the scanner folder. |
+| **Audit trail** | Per-track pipeline trace — see exactly which source won each field and why. |
+| **Scanner directory** | Drop any audio file into `/scanner` and it gets identified, tagged, and filed automatically. |
+| **Playlist Monitor** | Watch Spotify playlists; new tracks download and organise on schedule. |
+| **Artist Knowledge Cache editor** | Remove wrong genre or album entries directly from the web UI. |
+| **Plex-gold theme** | Redesigned UI in `#E5A00D` amber to match the Plex look. |
 
 ---
 
@@ -36,11 +55,9 @@ services:
     ports:
       - '8000:30321'
     volumes:
-      - ./downloads:/downloads
-      - ./musik:/musik
-      - ./scanner:/scanner
-      - ./data:/data
-      - ./frontend/dist:/downtify/frontend/dist:ro
+      - /your/plex/music:/musik          # point Plex at this folder
+      - /your/scanner/inbox:/scanner     # drop audio files here to auto-organise
+      - /your/data:/data                 # databases + settings
     environment:
       - DOWNTIFY_PORT=30321
       - CLIENT_ID=your_spotify_client_id
@@ -50,63 +67,93 @@ services:
       - ACOUSTID_API_KEY=your_acoustid_key
       - AUDD_API_TOKEN=your_audd_token
       - SOUNDCLOUD_CLIENT_ID=your_soundcloud_client_id
+      # - AUTH_PASSWORD=yourpassword     # optional: protect the web UI
 ```
 
 ```bash
 docker compose up -d
 ```
 
-Open `http://localhost:8000`.
+Open `http://localhost:8000` — paste a Spotify link to download, or drop files into `/scanner` to have them organised automatically.
+
+**Plex setup:** point your Plex music library at the `/musik` volume. The folder structure `Genre/Artist/Album/` is recognised by Plex without any custom agent.
+
+---
+
+## How it works
+
+```
+Spotify / SoundCloud URL
+        │
+        ▼
+  yt-dlp download ──────────────────────────────────────────┐
+                                                            │
+Scanner drop folder ─────────────────────────────────────── ▼
+                                              11-step metadata pipeline
+                                              ├─ Step 0   Read tags + fingerprint
+                                              ├─ Step 0.5 Artist cache lookup
+                                              ├─ Step 1   Query 6 API sources
+                                              ├─ Step 2-4 Voting (best-of consensus)
+                                              ├─ Step 4.5 Fuzzy album match
+                                              ├─ Step 5-9 MusicBrainz + fingerprint
+                                              ├─ Step 11  Organizer rules
+                                              └─ Step 12  Update artist cache
+                                                            │
+                                                            ▼
+                                              Genre/Artist/Album/track.mp3
+                                                            │
+                                                            ▼
+                                                     Plex Media Server
+```
 
 ---
 
 ## Metadata Voting Pipeline
 
-Every downloaded or scanned file runs through an 11-step pipeline:
+Every file runs through an 11-step pipeline where 6 independent sources vote on each metadata field — the plurality winner with the highest confidence is used:
 
-```
-Step 0   Tags + Fingerprint     Read ID3/Vorbis tags; run AudD/AcoustID if tags missing
-Step 0.5 Artist-Knowledge-Cache Check if artist genre is already known -> skip genre voting
-Step 1   Query 6 sources        Spotify, Deezer, Last.fm, MusicBrainz, SoundCloud, Discogs
-Step 2-4 Voting                 Plurality vote; quality: sehr hoch / hoch / mittel / niedrig
-Step 4.5 Album fuzzy match      If artist known: fuzzy-compare voted album against cached albums
-Step 5   Status 1               Fields with quality >= hoch are finalized
-Step 6-7 MusicBrainz            Resolve remaining open fields
-Step 8-9 Fingerprint            AcoustID -> AudD cascade for still-open fields
-Step 10  Org fields             Determine meta_source, apply best-of logic
-Step 11  Organizer rules        Genre keywords, artist->genre, country map, alias normalization
-Step 12  Cache write            Update artist genre + albums in knowledge cache
-```
+| Step | Name | Description |
+|---|---|---|
+| 0 | Tags + Fingerprint | Read existing ID3/Vorbis tags; AudD/AcoustID if tags are missing |
+| 0.5 | **Artist Cache** | If artist genre is known → skip genre voting entirely |
+| 1 | Query 6 sources | Spotify · Deezer · Last.fm · MusicBrainz · SoundCloud · Discogs |
+| 2–4 | Voting | Plurality vote per field; quality: `sehr hoch` / `hoch` / `mittel` / `niedrig` |
+| 4.5 | Album fuzzy match | Fuzzy-compare voted album against artist's known albums |
+| 5–7 | MusicBrainz | Resolve remaining open fields via recording + artist lookup |
+| 8–9 | Fingerprint | AcoustID → AudD cascade for still-unresolved fields |
+| 10 | Org fields | Determine final meta source |
+| 11 | Organizer rules | Genre keywords, artist→genre, country map, alias normalisation |
+| 12 | Cache write | Update artist genre + albums in knowledge cache |
 
-**Shortcut**: Spotify-sourced track + artist genre in cache = steps 1-9 entirely skipped.
+**Fast path:** Spotify-sourced track + artist genre in cache → steps 1–9 entirely skipped (zero external API calls).
 
 ---
 
 ## Artist Knowledge Cache
 
-The cache maps each artist to their genre and known albums:
+After the first song by an artist, Downtiplx remembers their genre and known albums:
 
 ```
-raf camora -> genre: Deutschrap | albums: [Palmen aus Plastik, NXTLVL, Anthrazit]
+raf camora  →  genre: Deutschrap  |  albums: [Palmen aus Plastik, NXTLVL, Anthrazit]
 ```
 
-- Genre is overwritten if a new song produces a different result (logged in audit trail)
-- Albums are append-only; remove wrong entries from the Cache Editor in the Organizer view
-- Genre from cache + Spotify-ID = zero external API calls
+- **Genre** is overwritten when a new song produces a different result (change is logged in the audit trail)
+- **Albums** are append-only — remove incorrect entries via the Cache Editor in the web UI
+- **Spotify-ID + cached genre = zero API calls** for that track
 
 ---
 
 ## Organizer Rules
 
-Configured in the web UI under **Organizer**:
+Configured in the web UI under **Organizer** — no config files to edit:
 
 | Rule type | Example | Effect |
 |---|---|---|
-| Genre keyword | `hip hop` -> `Hip-Hop` | Normalizes genre spelling |
-| Artist -> Genre | `RAF Camora` -> `Deutschrap` | Overrides voted genre for specific artists |
-| Country map | `DE` + `rap` -> `Deutschrap` | Country-aware genre routing |
-| Artist alias | `Raf Camora` = `RAF Camora` | Deduplicates artist spelling variants |
-| Separator tokens | `feat.`, `ft.`, `x` | Splits featured artists from main artist field |
+| Genre keyword | `hip hop` → `Hip-Hop` | Normalises genre spelling across all sources |
+| Artist → Genre | `RAF Camora` → `Deutschrap` | Hardcoded genre override for specific artists |
+| Country map | `DE` + `rap` → `Deutschrap` | Country-aware genre routing via MusicBrainz |
+| Artist alias | `Raf Camora` = `RAF Camora` | Deduplicates artist name variants |
+| Separator tokens | `feat.`, `ft.`, `×` | Splits featured artists out of the main artist field |
 
 ---
 
@@ -115,25 +162,33 @@ Configured in the web UI under **Organizer**:
 | Variable | Default | Description |
 |---|---|---|
 | `DOWNTIFY_PORT` | `30321` | HTTP port inside container |
-| `CLIENT_ID` | — | Spotify app client ID (required) |
-| `CLIENT_SECRET` | — | Spotify app client secret (required) |
+| `CLIENT_ID` | — | Spotify app client ID **(required)** |
+| `CLIENT_SECRET` | — | Spotify app client secret **(required)** |
 | `LASTFM_API_KEY` | — | Last.fm API key |
 | `DISCOGS_TOKEN` | — | Discogs personal access token |
 | `ACOUSTID_API_KEY` | — | AcoustID fingerprinting key |
 | `AUDD_API_TOKEN` | — | AudD recognition token |
 | `SOUNDCLOUD_CLIENT_ID` | — | SoundCloud client ID (auto-discoverable in UI) |
 | `DOWNLOAD_DIR` | `/downloads` | yt-dlp output directory |
-| `MUSIK_DIR` | `/musik` | Organized music library |
-| `SCANNER_DIR` | `/scanner` | Drop-folder for external files |
+| `MUSIK_DIR` | `/musik` | Organised music library (point Plex here) |
+| `SCANNER_DIR` | `/scanner` | Drop-folder for external audio files |
 | `DATA_DIR` | `/data` | SQLite databases + settings |
-| `ORGANIZER_POLL_INTERVAL` | `60` | Seconds between scanner sweeps |
-| `ORGANIZER_FILE_COOLDOWN` | `30` | Seconds to wait after last file change |
-| `ENABLE_DOWNLOAD_WATCHER` | `true` | Auto-process /downloads |
-| `ENABLE_SCANNER` | `true` | Auto-process /scanner |
 | `AUTH_PASSWORD` | — | Enable password protection when set |
+| `ORGANIZER_POLL_INTERVAL` | `60` | Seconds between scanner sweeps |
+| `ORGANIZER_FILE_COOLDOWN` | `30` | Seconds to wait after last file change before processing |
+| `ENABLE_DOWNLOAD_WATCHER` | `true` | Auto-process `/downloads` |
+| `ENABLE_SCANNER` | `true` | Auto-process `/scanner` |
+
+---
+
+## Credits
+
+Original project: **[downtify](https://github.com/henriquesebastiao/downtify)** by [@henriquesebastiao](https://github.com/henriquesebastiao)
+
+This fork extends the original with the automated organiser, metadata pipeline, and Plex-compatible folder structure. The download engine, Spotify integration, web player, and playlist monitor are all built on @henriquesebastiao's work.
 
 ---
 
 ## License
 
-GPL-3.0
+GPL-3.0 — same as the original project.
