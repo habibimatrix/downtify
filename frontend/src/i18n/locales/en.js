@@ -117,6 +117,13 @@ export default {
     newArtistPattern: 'artist pattern (e.g. bonz)',
     newGenre: 'target genre / folder',
     addArtistGenreRule: 'Add Rule',
+    soundcloudTitle: 'SoundCloud Client ID',
+    soundcloudHint: 'Required to use SoundCloud as a 6th metadata source during voting.',
+    soundcloudPlaceholder: 'Paste client_id or click Auto-detect…',
+    soundcloudDiscover: 'Auto-detect',
+    soundcloudFound: 'Client ID detected and saved.',
+    soundcloudNotFound: 'Could not extract client ID from SoundCloud. Try pasting it manually.',
+    soundcloudNote: 'SoundCloud rotates this ID every few months. If lookups stop working, click Auto-detect again.',
     separatorTokens: 'Artist Separator Tokens',
     separatorTokensHint:
       'When voting on artist names across sources, these tokens are used to split entries (e.g. "feat.", "&"). The voting then counts individual names.',

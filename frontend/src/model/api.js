@@ -158,6 +158,10 @@ function clearAllCache() {
   return API.delete('/api/cache/tracks')
 }
 
+function discoverSoundcloudClientId() {
+  return API.get('/api/soundcloud/discover')
+}
+
 function authStatus() {
   return API.get('/api/auth')
 }
@@ -198,6 +202,7 @@ export default {
   addCacheTrack,
   deleteCacheTrack,
   clearAllCache,
+  discoverSoundcloudClientId,
   authStatus,
   authLogin,
   check_for_update,

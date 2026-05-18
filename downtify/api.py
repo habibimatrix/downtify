@@ -693,6 +693,7 @@ def get_organizer_config() -> dict[str, Any]:
         r['folder'] for r in genre_rules
         if isinstance(r, dict) and r.get('folder')
     ))
+    from .soundcloud import get_client_id as _sc_get_id
     return {
         'genre_rules': genre_rules,
         'artist_rules': artist_rules,
@@ -700,6 +701,7 @@ def get_organizer_config() -> dict[str, Any]:
         'country_to_folder': country_to_folder,
         'available_folders': available_folders,
         'artist_separator_tokens': artist_separator_tokens,
+        'soundcloud_client_id': state.settings.get('soundcloud_client_id') or _sc_get_id(),
     }
 
 
@@ -721,6 +723,11 @@ async def save_organizer_config(request: Request) -> dict[str, Any]:
         state.settings['country_to_folder'] = payload['country_to_folder']
     if isinstance(payload.get('artist_separator_tokens'), list):
         state.settings['artist_separator_tokens'] = payload['artist_separator_tokens']
+    if isinstance(payload.get('soundcloud_client_id'), str):
+        cid = payload['soundcloud_client_id'].strip()
+        state.settings['soundcloud_client_id'] = cid
+        from .soundcloud import set_client_id as _sc_set
+        _sc_set(cid)
 
     if state.settings_path is not None:
         _save_settings_full(state.settings_path, state.settings)
@@ -732,6 +739,23 @@ async def save_organizer_config(request: Request) -> dict[str, Any]:
         svc.voter.separators = state.settings.get('artist_separator_tokens') or DEFAULT_SEPARATORS
 
     return {'saved': True}
+
+
+@router.get('/api/soundcloud/discover')
+async def soundcloud_discover_client_id() -> dict[str, Any]:
+    """Scrapt soundcloud.com und gibt die eingebettete client_id zurück."""
+    import asyncio
+    from .soundcloud import discover_client_id, set_client_id as _sc_set
+    loop = asyncio.get_event_loop()
+    cid = await loop.run_in_executor(None, discover_client_id)
+    if not cid:
+        raise HTTPException(status_code=404, detail='client_id nicht gefunden')
+    # Direkt aktivieren + in Settings persistieren
+    _sc_set(cid)
+    state.settings['soundcloud_client_id'] = cid
+    if state.settings_path is not None:
+        _save_settings_full(state.settings_path, state.settings)
+    return {'client_id': cid}
 
 
 # ── Cache API ─────────────────────────────────────────────────────────────────

@@ -204,6 +204,12 @@ def build_app() -> FastAPI:
     api.state.settings_path = settings_path
     api.state.settings = api._load_settings(settings_path)
 
+    # SoundCloud: gespeicherte ID aus Settings aktivieren (Env-Var als Fallback)
+    _sc_saved = api.state.settings.get('soundcloud_client_id', '')
+    if _sc_saved:
+        from downtify.soundcloud import set_client_id as _sc_set
+        _sc_set(_sc_saved)
+
     api.state.version = __version__
     api.state.downloader = Downloader(
         DOWNLOAD_DIR,
