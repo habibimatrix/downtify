@@ -2539,7 +2539,8 @@ class OrganizerService:
         log.info(f"Last.fm:          {'verbunden' if LASTFM_API_KEY else 'fehlt'}")
         log.info(f"AudD:             {'verbunden' if AUDD_API_TOKEN else 'fehlt'}")
         log.info(f"Polling:          {POLL_INTERVAL}s | Cooldown: {FILE_COOLDOWN}s")
-        log.info(f"Soundcloud:       {'verbunden' if SOUNDCLOUD_CLIENT_ID else 'fehlt'}")
+        from .soundcloud import get_client_id as _sc_get_id
+        log.info(f"Soundcloud:       {'verbunden' if _sc_get_id() else 'fehlt'}")
         log.info("=" * 60)
 
         if ENABLE_DOWNLOAD_WATCHER:
