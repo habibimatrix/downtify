@@ -77,8 +77,22 @@
             v-if="expandedSteps.has(step.step ?? step.name)"
             class="px-3 pb-3 pt-1 border-t border-base-content/8 bg-base-content/2"
           >
+            <!-- Step 0.5: Cache-Hit -->
+            <div v-if="step.step === '0.5'" class="space-y-2">
+              <p class="text-[11px] text-success flex items-center gap-1.5">
+                <Icon icon="clarity:storage-line" class="h-3.5 w-3.5" />
+                {{ t('audit.cacheHit') }}
+              </p>
+              <div v-if="step.values" class="grid grid-cols-2 gap-1.5">
+                <div v-for="(val, key) in step.values" :key="key" class="flex items-center gap-1.5 text-[11px]">
+                  <span class="text-base-content/40 capitalize w-12 shrink-0">{{ key }}</span>
+                  <span class="text-base-content/70 font-medium truncate">{{ val || '—' }}</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Step 0: Tag values -->
-            <div v-if="step.step === 0 && step.values" class="grid grid-cols-2 gap-1.5">
+            <div v-else-if="step.step === 0 && step.values" class="grid grid-cols-2 gap-1.5">
               <div v-for="(val, key) in step.values" :key="key" class="flex items-center gap-1.5 text-[11px]">
                 <span class="text-base-content/40 capitalize w-12 shrink-0">{{ key }}</span>
                 <span class="text-base-content/70 font-medium truncate">{{ val || '—' }}</span>
@@ -253,7 +267,8 @@ watch(
       const res = await API.getAudit(props.trackId)
       audit.value = res.data
       // Auto-expand first few steps
-      const autoExpand = [0, 1, 2, 11]
+      const hasCacheHit = res.data.steps?.some((s) => s.step === '0.5')
+      const autoExpand = hasCacheHit ? ['0.5', 11] : [0, 1, 2, 11]
       expandedSteps.value = new Set(autoExpand)
     } catch {
       error.value = t('audit.noData')
@@ -276,7 +291,7 @@ function stepLabel(step) {
 }
 
 function stepBadgeClass(step) {
-  if (step.name === 'Cache-Hit') return 'bg-success/15 text-success'
+  if (step.step === '0.5' || step.name === 'Cache-Hit') return 'bg-success/15 text-success'
   if (step.name === 'Cache') return 'bg-primary/15 text-primary'
   if (step.step === 11) return 'bg-warning/15 text-warning'
   if (step.step === 0) return 'bg-base-content/10 text-base-content/50'

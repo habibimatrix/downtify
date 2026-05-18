@@ -85,6 +85,9 @@ AUDIO_EXT = {".mp3", ".m4a", ".flac", ".ogg", ".wav", ".aac", ".opus"}
 
 MB_HEADERS = {"User-Agent": "DowntifyOrganizer/1.0 (self-hosted-nas)"}
 
+# Global semaphore: MusicBrainz enforces 1 req/sec across the entire process
+_MB_SEMAPHORE = threading.Semaphore(1)
+
 SOUNDCLOUD_CLIENT_ID = os.getenv("SOUNDCLOUD_CLIENT_ID", "")
 
 DEFAULT_SEPARATORS: list[str] = [
@@ -1418,60 +1421,62 @@ def search_lastfm_track(artist: str, title: str) -> dict:
 
 def lookup_musicbrainz_artist(artist: str) -> tuple[Optional[str], list]:
     """Gibt (country, tags) zurück."""
-    try:
-        r = requests.get(
-            "https://musicbrainz.org/ws/2/artist/",
-            params={"query": f'artist:"{artist}"', "fmt": "json", "limit": 1},
-            headers=MB_HEADERS, timeout=12,
-        )
-        time.sleep(1.1)  # Rate-Limit MB: 1 req/sec
-        if r.status_code != 200:
-            return None, []
-        items = r.json().get("artists", [])
-        if not items:
-            return None, []
-        a = items[0]
-        country = a.get("country")
-        tags = [t["name"] for t in a.get("tags", []) if t.get("name")]
-        genres = [g["name"] for g in a.get("genres", []) if g.get("name")]
-        return country, tags + genres
-    except Exception as e:
-        log.warning(f"  MusicBrainz-Fehler: {e}")
+    with _MB_SEMAPHORE:
+        try:
+            r = requests.get(
+                "https://musicbrainz.org/ws/2/artist/",
+                params={"query": f'artist:"{artist}"', "fmt": "json", "limit": 1},
+                headers=MB_HEADERS, timeout=12,
+            )
+            time.sleep(1.1)  # Rate-Limit MB: 1 req/sec
+            if r.status_code != 200:
+                return None, []
+            items = r.json().get("artists", [])
+            if not items:
+                return None, []
+            a = items[0]
+            country = a.get("country")
+            tags = [t["name"] for t in a.get("tags", []) if t.get("name")]
+            genres = [g["name"] for g in a.get("genres", []) if g.get("name")]
+            return country, tags + genres
+        except Exception as e:
+            log.warning(f"  MusicBrainz-Fehler: {e}")
     return None, []
 
 
 def search_musicbrainz_recording(artist: str, title: str) -> dict:
     """MusicBrainz recording search → {artist, album, title} or {}."""
-    try:
-        r = requests.get(
-            "https://musicbrainz.org/ws/2/recording/",
-            params={
-                "query": f'recording:"{title}" AND artist:"{artist}"',
-                "fmt": "json",
-                "limit": 3,
-                "inc": "artist-credits releases",
-            },
-            headers=MB_HEADERS,
-            timeout=12,
-        )
-        time.sleep(1.1)
-        if r.status_code != 200:
-            return {}
-        recordings = r.json().get("recordings", [])
-        if not recordings:
-            return {}
-        rec = recordings[0]
-        rec_title = rec.get("title", "")
-        credits = rec.get("artist-credit", [])
-        artist_name = ""
-        if credits:
-            first = credits[0]
-            artist_name = first.get("name") or first.get("artist", {}).get("name", "")
-        releases = rec.get("releases", [])
-        album_name = releases[0].get("title", "") if releases else ""
-        return {"artist": artist_name, "album": album_name, "title": rec_title, "genre": ""}
-    except Exception as e:
-        log.debug(f"  MusicBrainz Recording-Fehler: {e}")
+    with _MB_SEMAPHORE:
+        try:
+            r = requests.get(
+                "https://musicbrainz.org/ws/2/recording/",
+                params={
+                    "query": f'recording:"{title}" AND artist:"{artist}"',
+                    "fmt": "json",
+                    "limit": 3,
+                    "inc": "artist-credits releases",
+                },
+                headers=MB_HEADERS,
+                timeout=12,
+            )
+            time.sleep(1.1)
+            if r.status_code != 200:
+                return {}
+            recordings = r.json().get("recordings", [])
+            if not recordings:
+                return {}
+            rec = recordings[0]
+            rec_title = rec.get("title", "")
+            credits = rec.get("artist-credit", [])
+            artist_name = ""
+            if credits:
+                first = credits[0]
+                artist_name = first.get("name") or first.get("artist", {}).get("name", "")
+            releases = rec.get("releases", [])
+            album_name = releases[0].get("title", "") if releases else ""
+            return {"artist": artist_name, "album": album_name, "title": rec_title, "genre": ""}
+        except Exception as e:
+            log.debug(f"  MusicBrainz Recording-Fehler: {e}")
     return {}
 
 
@@ -1936,13 +1941,23 @@ class MetadataVoter:
             result.update(orig)
             if final_genre != cached.get("genre"):
                 self.db.set_track_cache(ak, tk, {**cached, "genre": final_genre})
-            self._log_step(None, "Cache-Hit", action="Schritte 1-10 übersprungen")
+            self._log_step("0.5", "Cache-Hit", action="Schritte 1-10 übersprungen", values={
+                "genre": final_genre,
+                "artist": cached.get("artist", ""),
+                "album": cached.get("album", ""),
+                "title": cached.get("title", ""),
+            })
             self._save_audit(track_id, {"steps": self.audit_log, "cache": {"action": "hit"}})
             return result
 
         # Schritt 1: Alle Quellen parallel befragen
-        sources = self._step1_query_sources(artist, title_raw, tags)
-        self._log_step(1, "6 Quellen befragt", sources=sources)
+        # Spotify-Downloads: artist/album/title bereits bekannt → nur Genre voten
+        spotify_sourced = bool(
+            tags.get("spotify_id")
+            and not str(tags["spotify_id"]).startswith(("scanner:", "pfad:"))
+        )
+        sources = self._step1_query_sources(artist, title_raw, tags, spotify_sourced=spotify_sourced)
+        self._log_step(1, "6 Quellen befragt", sources=sources, spotify_sourced=spotify_sourced)
 
         # Schritt 2-4: Voting
         ergebnis1, status1, counts = self._step2_4_vote(sources)
@@ -2050,7 +2065,9 @@ class MetadataVoter:
                         tags[k] = audd[k]
         return tags
 
-    def _step1_query_sources(self, artist: str, title: str, tags: dict) -> dict:
+    def _step1_query_sources(
+        self, artist: str, title: str, tags: dict, *, spotify_sourced: bool = False
+    ) -> dict:
         file_meta = {
             "genre": tags.get("genre", ""),
             "artist": tags.get("artist", ""),
@@ -2094,6 +2111,16 @@ class MetadataVoter:
             f"Last.fm: {lf.get('genre') or '—'} | Discogs: {dc.get('genre') or '—'} | "
             f"SC: {sc.get('genre') or '—'}"
         )
+
+        if spotify_sourced:
+            # Spotify-Download: artist/album/title sind bereits bekannt.
+            # Nur Genre wird per Voting aufgelöst → die eigenen Tag-Werte in alle
+            # Quellen einsetzen, damit das Voting 6/6 "sehr hoch" ergibt.
+            log.info("  Spotify-sourced → artist/album/title aus Tags, nur Genre wird gevoted")
+            for src in (sp, dz, lf, dc, sc):
+                for f in ("artist", "album", "title"):
+                    src[f] = file_meta[f]
+
         return {"file": file_meta, "spotify": sp, "deezer": dz, "lastfm": lf, "discogs": dc, "soundcloud": sc}
 
     def _step2_4_vote(self, sources: dict) -> tuple:
