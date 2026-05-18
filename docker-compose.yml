@@ -7,11 +7,46 @@ services:
     ports:
       - '8000:30321'
     volumes:
-      - ./docker/downloads:/downloads
-      - ./docker/data:/data
+      - ./docker/downloads:/downloads   # Eingehende Downloads (yt-dlp)
+      - ./docker/musik:/musik           # Organisierte Musikbibliothek (Zielordner)
+      - ./docker/scanner:/scanner       # Scanner-Eingangsordner (extern hinzugefügte Dateien)
+      - ./docker/data:/data             # Datenbanken: organizer.db, monitor.db, settings.json
       - ./frontend/dist:/downtify/frontend/dist:ro
     environment:
+      # ── Server ──────────────────────────────────────────────────────────────
       - DOWNTIFY_PORT=30321
+
+      # ── Verzeichnisse (Defaults passen zu den Volumes oben) ─────────────────
+      # - DOWNLOAD_DIR=/downloads
+      # - MUSIK_DIR=/musik
+      # - SCANNER_DIR=/scanner
+      # - DATA_DIR=/data
+
+      # ── Spotify API (für Metadaten-Lookup + Download) ── PFLICHT ────────────
+      - CLIENT_ID=dein_spotify_client_id
+      - CLIENT_SECRET=dein_spotify_client_secret
+
+      # ── Last.fm API (für Genre-Voting) ── empfohlen ──────────────────────────
+      - LASTFM_API_KEY=dein_lastfm_api_key
+
+      # ── Discogs API (für Genre/Artist-Voting) ── empfohlen ───────────────────
+      - DISCOGS_TOKEN=dein_discogs_token
+
+      # ── AcoustID (Fingerprint, Schritt 8) ── empfohlen ──────────────────────
+      - ACOUSTID_API_KEY=dein_acoustid_api_key
+
+      # ── AudD (Fingerprint-Fallback, Schritt 0+8) ── optional ────────────────
+      - AUDD_API_TOKEN=dein_audd_token
+
+      # ── SoundCloud (für Genre-Voting, Schritt 1) ── optional ─────────────────
+      - SOUNDCLOUD_CLIENT_ID=dein_soundcloud_client_id
+
+      # ── Organizer-Verhalten ── optional (Defaults unten) ─────────────────────
+      # - ORGANIZER_POLL_INTERVAL=60    # Sekunden zwischen Scanner-Durchläufen
+      # - ORGANIZER_FILE_COOLDOWN=30    # Sekunden Wartezeit nach letzter Dateiänderung
+      # - ENABLE_DOWNLOAD_WATCHER=true  # Download-Ordner automatisch verarbeiten
+      # - ENABLE_SCANNER=true           # Scanner-Ordner automatisch verarbeiten
+
     dns:
       - 1.1.1.1
       - 1.0.0.1
