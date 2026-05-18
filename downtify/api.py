@@ -42,7 +42,9 @@ from .monitor import PlaylistMonitorDB, check_playlist
 from .organizer_service import (
     DEFAULT_COUNTRY_TO_FOLDER,
     DEFAULT_GENRE_RULES,
+    DEFAULT_SEPARATORS,
     get_organizer,
+    stop_organizer,
 )
 
 DEFAULT_SETTINGS: dict[str, Any] = {
@@ -686,6 +688,7 @@ def get_organizer_config() -> dict[str, Any]:
         country_to_folder = DEFAULT_COUNTRY_TO_FOLDER
     artist_rules = state.settings.get('artist_rules') or []
     artist_genre_rules = state.settings.get('artist_genre_rules') or []
+    artist_separator_tokens = state.settings.get('artist_separator_tokens') or DEFAULT_SEPARATORS
     available_folders = sorted(set(
         r['folder'] for r in genre_rules
         if isinstance(r, dict) and r.get('folder')
@@ -696,6 +699,7 @@ def get_organizer_config() -> dict[str, Any]:
         'artist_genre_rules': artist_genre_rules,
         'country_to_folder': country_to_folder,
         'available_folders': available_folders,
+        'artist_separator_tokens': artist_separator_tokens,
     }
 
 
@@ -715,16 +719,97 @@ async def save_organizer_config(request: Request) -> dict[str, Any]:
         state.settings['artist_genre_rules'] = payload['artist_genre_rules']
     if isinstance(payload.get('country_to_folder'), dict):
         state.settings['country_to_folder'] = payload['country_to_folder']
+    if isinstance(payload.get('artist_separator_tokens'), list):
+        state.settings['artist_separator_tokens'] = payload['artist_separator_tokens']
 
     if state.settings_path is not None:
         _save_settings_full(state.settings_path, state.settings)
 
-    # Hot-reload organizer rules
+    # Hot-reload organizer rules + separator tokens
     svc = get_organizer()
     if svc is not None:
         svc.resolver.reload_from_settings(state.settings)
+        svc.voter.separators = state.settings.get('artist_separator_tokens') or DEFAULT_SEPARATORS
 
     return {'saved': True}
+
+
+# ── Cache API ─────────────────────────────────────────────────────────────────
+
+@router.get('/api/cache/stats')
+def get_cache_stats() -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        return {'count': 0}
+    count = svc.db.count_track_cache()
+    return {'count': count}
+
+
+@router.get('/api/cache/tracks')
+def list_cache_tracks(
+    search: str = Query(''),
+    limit: int = Query(50),
+    offset: int = Query(0),
+) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        return {'items': [], 'total': 0}
+    items = svc.db.list_track_cache(search=search, limit=limit, offset=offset)
+    total = svc.db.count_track_cache(search=search)
+    return {'items': items, 'total': total}
+
+
+@router.post('/api/cache/tracks')
+async def add_cache_track(request: Request) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Invalid JSON') from exc
+    artist_norm = re.sub(r'[^a-z0-9]', '', (payload.get('artist') or '').lower())
+    title_norm = re.sub(r'[^a-z0-9]', '', (payload.get('title') or '').lower())
+    if not artist_norm or not title_norm:
+        raise HTTPException(status_code=400, detail='artist and title required')
+    meta = {
+        'genre': payload.get('genre', ''),
+        'artist': payload.get('artist', ''),
+        'album': payload.get('album', ''),
+        'title': payload.get('title', ''),
+        'genre_raw': payload.get('genre', ''),
+    }
+    svc.db.set_track_cache(artist_norm, title_norm, meta)
+    return {'saved': True, 'artist_norm': artist_norm, 'title_norm': title_norm}
+
+
+@router.delete('/api/cache/tracks')
+def delete_all_cache() -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    svc.db.clear_track_cache()
+    return {'deleted': True}
+
+
+@router.delete('/api/cache/tracks/{artist_norm}/{title_norm}')
+def delete_cache_track(artist_norm: str, title_norm: str) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    svc.db.delete_track_cache(artist_norm, title_norm)
+    return {'deleted': True}
+
+
+@router.get('/api/audit/{track_id}')
+def get_audit(track_id: str) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    audit = svc.db.get_audit(track_id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail='No audit found')
+    return audit
 
 
 @router.websocket('/api/ws')

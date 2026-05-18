@@ -384,6 +384,142 @@
             </ul>
           </div>
         </section>
+
+        <!-- ── Separator Tokens ─────────────────────────────────────────── -->
+        <section class="rounded-2xl border border-base-content/10 overflow-hidden">
+          <div class="px-5 py-4 border-b border-base-content/8 bg-base-content/2">
+            <h2 class="text-sm font-semibold">{{ t('organizer.separatorTokens') }}</h2>
+            <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.separatorTokensHint') }}</p>
+          </div>
+          <div class="px-5 py-4 space-y-3">
+            <!-- Token chips -->
+            <div class="flex flex-wrap gap-1.5">
+              <span
+                v-for="sep in separatorTokens"
+                :key="sep"
+                class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-base-content/8"
+              >
+                <span class="font-mono">{{ sep }}</span>
+                <button
+                  class="text-base-content/30 hover:text-error transition-colors ml-0.5"
+                  @click="removeSeparator(sep)"
+                >
+                  <Icon icon="clarity:times-line" class="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+            <!-- Add new separator -->
+            <div class="flex gap-2">
+              <input
+                v-model="newSeparator"
+                class="input input-sm h-9 flex-1 font-mono text-sm"
+                :placeholder="t('organizer.newSeparator')"
+                @keydown.enter.prevent="addSeparator"
+              />
+              <button class="btn btn-sm btn-ghost h-9 px-3" @click="addSeparator">
+                <Icon icon="clarity:plus-line" class="h-4 w-4" />
+                {{ t('organizer.addSeparator') }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Cache Editor ──────────────────────────────────────────────── -->
+        <section class="rounded-2xl border border-base-content/10 overflow-hidden">
+          <div class="px-5 py-4 border-b border-base-content/8 bg-base-content/2 flex items-center justify-between gap-3">
+            <div>
+              <h2 class="text-sm font-semibold">{{ t('organizer.cacheEditor') }}</h2>
+              <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.cacheEditorHint') }}</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-xs text-base-content/40">{{ t('organizer.cacheCount', { n: cacheTotal }) }}</span>
+              <button
+                v-if="cacheTotal > 0"
+                class="btn btn-xs btn-ghost text-error/60 hover:text-error h-8 px-3"
+                @click="clearCache"
+              >{{ t('organizer.cacheClearAll') }}</button>
+              <button
+                class="btn btn-xs btn-ghost h-8 px-3"
+                @click="showAddCache = !showAddCache"
+              >
+                <Icon icon="clarity:plus-line" class="h-3.5 w-3.5 mr-1" />
+                {{ t('organizer.cacheAdd') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Add cache entry form -->
+          <div v-if="showAddCache" class="px-5 py-3 border-b border-base-content/8 bg-warning/5 space-y-2">
+            <p class="text-xs font-medium text-warning">{{ t('organizer.cacheAddTitle') }}</p>
+            <div class="grid grid-cols-2 gap-2">
+              <input v-model="newCache.artist" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheArtist')" />
+              <input v-model="newCache.title" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheTitle')" />
+              <input v-model="newCache.genre" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheGenre')" />
+              <input v-model="newCache.album" class="input input-sm h-8 text-sm" :placeholder="t('organizer.cacheAlbum')" />
+            </div>
+            <div class="flex gap-2 justify-end">
+              <button class="btn btn-xs btn-ghost h-8" @click="showAddCache = false">Cancel</button>
+              <button class="btn btn-xs btn-primary h-8 px-4" @click="addCacheEntry" :disabled="!newCache.artist || !newCache.title">Save</button>
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div class="px-5 pt-3 pb-2">
+            <input
+              v-model="cacheSearch"
+              class="input input-sm h-9 w-full text-sm"
+              :placeholder="t('organizer.cacheSearch')"
+            />
+          </div>
+
+          <!-- Status msg -->
+          <Transition name="toast">
+            <div v-if="cacheMsg" class="px-5 pb-2">
+              <span class="text-xs text-success">{{ cacheMsg }}</span>
+            </div>
+          </Transition>
+
+          <!-- Cache list -->
+          <div v-if="cacheLoading" class="flex items-center justify-center p-8">
+            <span class="loading loading-spinner loading-sm" />
+          </div>
+          <ul v-else-if="cacheItems.length" class="divide-y divide-base-content/5">
+            <li
+              v-for="item in cacheItems"
+              :key="item.artist_norm + item.title_norm"
+              class="flex items-center gap-3 px-5 py-2.5 hover:bg-base-content/3 group"
+            >
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-medium truncate">{{ item.artist }}</span>
+                  <span class="text-xs text-base-content/40">—</span>
+                  <span class="text-sm truncate text-base-content/70">{{ item.title }}</span>
+                </div>
+                <div class="flex gap-1.5 mt-0.5 flex-wrap">
+                  <span v-if="item.genre" class="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">{{ item.genre }}</span>
+                  <span v-if="item.album" class="text-[10px] px-1.5 py-0.5 rounded-md bg-base-content/8 text-base-content/50 italic">{{ item.album }}</span>
+                  <span class="text-[10px] text-base-content/25">{{ new Date(item.cached_at * 1000).toLocaleDateString() }}</span>
+                </div>
+              </div>
+              <button
+                class="icon-btn h-7 w-7 text-error/40 hover:text-error hover:bg-error/10 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                @click="deleteCacheEntry(item)"
+              >
+                <Icon icon="clarity:trash-line" class="h-3.5 w-3.5" />
+              </button>
+            </li>
+          </ul>
+          <div v-else class="px-5 py-6 text-center text-sm text-base-content/40">
+            {{ cacheTotal === 0 ? t('organizer.cacheCount', { n: 0 }) : t('common.noResults') }}
+          </div>
+
+          <!-- Cache pagination -->
+          <div v-if="cacheTotal > cachePageSize" class="px-5 py-3 flex items-center justify-between border-t border-base-content/8">
+            <button class="btn btn-xs btn-ghost" :disabled="cachePage === 1" @click="cachePage--; loadCache()">←</button>
+            <span class="text-xs text-base-content/40">{{ cachePage }} / {{ Math.ceil(cacheTotal / cachePageSize) }}</span>
+            <button class="btn btn-xs btn-ghost" :disabled="cachePage >= Math.ceil(cacheTotal / cachePageSize)" @click="cachePage++; loadCache()">→</button>
+          </div>
+        </section>
       </template>
     </div>
   </div>
@@ -411,6 +547,8 @@ const genreRules = ref([])
 const artistRules = ref([])
 const artistGenreRules = ref([])
 const availableFolders = ref([])
+const separatorTokens = ref([])
+const newSeparator = ref('')
 
 const genreSearch = ref('')
 const folderFilter = ref('')
@@ -537,6 +675,86 @@ function removeArtistRule(idx) {
   artistRules.value = artistRules.value.filter((_, i) => i !== idx)
 }
 
+function addSeparator() {
+  const s = newSeparator.value.trim()
+  if (s && !separatorTokens.value.includes(s)) {
+    separatorTokens.value = [...separatorTokens.value, s]
+    isDirty.value = true
+  }
+  newSeparator.value = ''
+}
+
+function removeSeparator(sep) {
+  separatorTokens.value = separatorTokens.value.filter((s) => s !== sep)
+  isDirty.value = true
+}
+
+// ── Cache Editor ──────────────────────────────────────────────────────────────
+
+const cacheItems = ref([])
+const cacheTotal = ref(0)
+const cacheSearch = ref('')
+const cachePage = ref(1)
+const cachePageSize = 20
+const cacheLoading = ref(false)
+const cacheMsg = ref('')
+const showAddCache = ref(false)
+const newCache = ref({ artist: '', title: '', genre: '', album: '' })
+
+async function loadCache() {
+  cacheLoading.value = true
+  try {
+    const offset = (cachePage.value - 1) * cachePageSize
+    const res = await API.listCacheTracks(cacheSearch.value, cachePageSize, offset)
+    cacheItems.value = res.data.items || []
+    cacheTotal.value = res.data.total || 0
+  } catch (e) {
+    console.error('Cache load failed', e)
+  } finally {
+    cacheLoading.value = false
+  }
+}
+
+async function deleteCacheEntry(item) {
+  try {
+    await API.deleteCacheTrack(item.artist_norm, item.title_norm)
+    cacheMsg.value = t('organizer.cacheDeleted')
+    loadCache()
+  } catch {}
+  setTimeout(() => { cacheMsg.value = '' }, 3000)
+}
+
+async function clearCache() {
+  if (!confirm(t('organizer.cacheClearConfirm', { n: cacheTotal.value }))) return
+  try {
+    await API.clearAllCache()
+    cacheMsg.value = t('organizer.cacheClearedAll')
+    loadCache()
+  } catch {}
+  setTimeout(() => { cacheMsg.value = '' }, 3000)
+}
+
+async function addCacheEntry() {
+  if (!newCache.value.artist || !newCache.value.title) return
+  try {
+    await API.addCacheTrack(newCache.value)
+    cacheMsg.value = t('organizer.cacheSaved')
+    newCache.value = { artist: '', title: '', genre: '', album: '' }
+    showAddCache.value = false
+    loadCache()
+  } catch {}
+  setTimeout(() => { cacheMsg.value = '' }, 3000)
+}
+
+let cacheSearchTimeout = null
+watch(cacheSearch, () => {
+  clearTimeout(cacheSearchTimeout)
+  cacheSearchTimeout = setTimeout(() => {
+    cachePage.value = 1
+    loadCache()
+  }, 300)
+})
+
 async function loadConfig() {
   loading.value = true
   try {
@@ -545,6 +763,7 @@ async function loadConfig() {
     artistRules.value = res.data.artist_rules || []
     artistGenreRules.value = res.data.artist_genre_rules || []
     availableFolders.value = res.data.available_folders || []
+    separatorTokens.value = res.data.artist_separator_tokens || []
     isDirty.value = false
   } catch (e) {
     console.error('Failed to load organizer config', e)
@@ -561,6 +780,7 @@ async function saveRules() {
       genre_rules: genreRules.value,
       artist_rules: artistRules.value,
       artist_genre_rules: artistGenreRules.value,
+      artist_separator_tokens: separatorTokens.value,
     })
     saveResult.value = 'ok'
     isDirty.value = false
@@ -578,7 +798,10 @@ async function saveRules() {
   }
 }
 
-onMounted(loadConfig)
+onMounted(() => {
+  loadConfig()
+  loadCache()
+})
 </script>
 
 <style scoped>

@@ -134,6 +134,38 @@ function saveOrganizerConfig(config) {
   return API.post('/api/organizer/config', config)
 }
 
+function getAudit(trackId) {
+  return API.get(`/api/audit/${encodeURIComponent(trackId)}`)
+}
+
+function getCacheStats() {
+  return API.get('/api/cache/stats')
+}
+
+function listCacheTracks(search = '', limit = 50, offset = 0) {
+  return API.get('/api/cache/tracks', { params: { search, limit, offset } })
+}
+
+function addCacheTrack(entry) {
+  return API.post('/api/cache/tracks', entry)
+}
+
+function deleteCacheTrack(artistNorm, titleNorm) {
+  return API.delete(`/api/cache/tracks/${encodeURIComponent(artistNorm)}/${encodeURIComponent(titleNorm)}`)
+}
+
+function clearAllCache() {
+  return API.delete('/api/cache/tracks')
+}
+
+function authStatus() {
+  return API.get('/api/auth')
+}
+
+function authLogin(password) {
+  return API.post('/api/auth', { password })
+}
+
 function ws_onmessage(fn) {
   return (wsConnection.onmessage = fn)
 }
@@ -160,6 +192,14 @@ export default {
   deleteTruth,
   getOrganizerConfig,
   saveOrganizerConfig,
+  getAudit,
+  getCacheStats,
+  listCacheTracks,
+  addCacheTrack,
+  deleteCacheTrack,
+  clearAllCache,
+  authStatus,
+  authLogin,
   check_for_update,
   ws_onmessage,
   ws_onerror,

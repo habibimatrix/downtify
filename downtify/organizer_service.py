@@ -14,6 +14,8 @@ Konfiguration ausschließlich via Umgebungsvariablen.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import json
 import logging
 import os
 import re
@@ -22,6 +24,8 @@ import sqlite3
 import threading
 import time
 import unicodedata
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -80,6 +84,14 @@ BESTOF_MIN = 2
 AUDIO_EXT = {".mp3", ".m4a", ".flac", ".ogg", ".wav", ".aac", ".opus"}
 
 MB_HEADERS = {"User-Agent": "DowntifyOrganizer/1.0 (self-hosted-nas)"}
+
+SOUNDCLOUD_CLIENT_ID = os.getenv("SOUNDCLOUD_CLIENT_ID", "")
+
+DEFAULT_SEPARATORS: list[str] = [
+    "feat.", "ft.", "featuring", "feat", "&", " x ", "vs.", "vs",
+    "with", "and", "×", "+", "/", "✕", "pres.", "presents",
+    "prod.", "produced by", "meets",
+]
 
 log = logging.getLogger("downtify.organizer")
 
@@ -1023,6 +1035,20 @@ class OrganizerDB:
                     country      TEXT,
                     looked_up_at INTEGER
                 );
+
+                CREATE TABLE IF NOT EXISTS track_metadata_cache (
+                    artist_norm      TEXT NOT NULL,
+                    title_norm       TEXT NOT NULL,
+                    final_meta_json  TEXT NOT NULL,
+                    cached_at        INTEGER NOT NULL,
+                    PRIMARY KEY (artist_norm, title_norm)
+                );
+
+                CREATE TABLE IF NOT EXISTS metadata_audit (
+                    track_id   TEXT PRIMARY KEY,
+                    audit_json TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
             """)
             self.conn.commit()
 
@@ -1078,6 +1104,95 @@ class OrganizerDB:
                 (artist, country or "", int(time.time())),
             )
             self.conn.commit()
+
+    def get_track_cache(self, artist_norm: str, title_norm: str) -> Optional[dict]:
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT final_meta_json, cached_at FROM track_metadata_cache WHERE artist_norm=? AND title_norm=?",
+                (artist_norm, title_norm),
+            ).fetchone()
+        if row is None:
+            return None
+        age_days = (time.time() - row[1]) / 86400
+        if age_days > 30:
+            return None
+        return json.loads(row[0])
+
+    def set_track_cache(self, artist_norm: str, title_norm: str, meta: dict) -> None:
+        with self.lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO track_metadata_cache (artist_norm, title_norm, final_meta_json, cached_at) VALUES (?, ?, ?, ?)",
+                (artist_norm, title_norm, json.dumps(meta), int(time.time())),
+            )
+            self.conn.commit()
+
+    def delete_track_cache(self, artist_norm: str, title_norm: str) -> None:
+        with self.lock:
+            self.conn.execute(
+                "DELETE FROM track_metadata_cache WHERE artist_norm=? AND title_norm=?",
+                (artist_norm, title_norm),
+            )
+            self.conn.commit()
+
+    def clear_track_cache(self) -> None:
+        with self.lock:
+            self.conn.execute("DELETE FROM track_metadata_cache")
+            self.conn.commit()
+
+    def list_track_cache(self, search: str = "", limit: int = 50, offset: int = 0) -> list:
+        with self.lock:
+            if search:
+                rows = self.conn.execute(
+                    """SELECT artist_norm, title_norm, final_meta_json, cached_at
+                       FROM track_metadata_cache
+                       WHERE artist_norm LIKE ? OR title_norm LIKE ?
+                       ORDER BY cached_at DESC LIMIT ? OFFSET ?""",
+                    (f"%{search}%", f"%{search}%", limit, offset),
+                ).fetchall()
+            else:
+                rows = self.conn.execute(
+                    """SELECT artist_norm, title_norm, final_meta_json, cached_at
+                       FROM track_metadata_cache
+                       ORDER BY cached_at DESC LIMIT ? OFFSET ?""",
+                    (limit, offset),
+                ).fetchall()
+        result = []
+        for artist_norm, title_norm, meta_json, cached_at in rows:
+            meta = json.loads(meta_json)
+            result.append({
+                "artist_norm": artist_norm,
+                "title_norm": title_norm,
+                "cached_at": cached_at,
+                **meta,
+            })
+        return result
+
+    def count_track_cache(self, search: str = "") -> int:
+        with self.lock:
+            if search:
+                row = self.conn.execute(
+                    "SELECT COUNT(*) FROM track_metadata_cache WHERE artist_norm LIKE ? OR title_norm LIKE ?",
+                    (f"%{search}%", f"%{search}%"),
+                ).fetchone()
+            else:
+                row = self.conn.execute("SELECT COUNT(*) FROM track_metadata_cache").fetchone()
+        return row[0] if row else 0
+
+    def save_audit(self, track_id: str, audit_json: str) -> None:
+        with self.lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO metadata_audit (track_id, audit_json, created_at) VALUES (?, ?, ?)",
+                (track_id, audit_json, int(time.time())),
+            )
+            self.conn.commit()
+
+    def get_audit(self, track_id: str) -> Optional[dict]:
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT audit_json FROM metadata_audit WHERE track_id=?",
+                (track_id,),
+            ).fetchone()
+        return json.loads(row[0]) if row else None
 
     def shutdown(self) -> None:
         with self.lock:
@@ -1155,11 +1270,60 @@ class SpotifyClient:
             log.warning(f"  Spotify-Fehler: {e}")
         return []
 
+    def search_track(self, artist: str, title: str) -> dict:
+        """Full track metadata from Spotify. Returns {genre, artist, album, title} or {}."""
+        token = self.get_token()
+        if not token:
+            return {}
+        h = {"Authorization": f"Bearer {token}"}
+        try:
+            for q in [f"track:{title} artist:{artist}", f"{artist} {title}"]:
+                r = requests.get(
+                    "https://api.spotify.com/v1/search",
+                    params={"q": q, "type": "track", "limit": 1},
+                    headers=h, timeout=10,
+                )
+                if r.status_code != 200:
+                    continue
+                tracks = r.json().get("tracks", {}).get("items", [])
+                if not tracks:
+                    continue
+                t = tracks[0]
+                artist_name = t["artists"][0]["name"] if t.get("artists") else ""
+                album_name = t.get("album", {}).get("name", "")
+                title_name = t.get("name", "")
+                artist_id = t["artists"][0]["id"] if t.get("artists") else ""
+                genres: list = []
+                if artist_id:
+                    r2 = requests.get(
+                        f"https://api.spotify.com/v1/artists/{artist_id}",
+                        headers=h, timeout=10,
+                    )
+                    if r2.status_code == 200:
+                        genres = r2.json().get("genres", [])
+                return {
+                    "genre": genres[0] if genres else "",
+                    "artist": artist_name,
+                    "album": album_name,
+                    "title": title_name,
+                }
+        except Exception as e:
+            log.debug(f"  Spotify search_track Fehler: {e}")
+        return {}
+
 
 # ── Deezer API (kein Auth nötig) ─────────────────────────────────────────────
 
 def lookup_deezer(artist: str, title: str) -> list:
     """Deezer Track suchen → Album-Genre auflösen. Kein API-Key nötig."""
+    result = search_deezer_track(artist, title)
+    if result.get("genre"):
+        return [result["genre"]]
+    return []
+
+
+def search_deezer_track(artist: str, title: str) -> dict:
+    """Deezer track search → full metadata {genre, artist, album, title}."""
     try:
         r = requests.get(
             "https://api.deezer.com/search",
@@ -1167,22 +1331,26 @@ def lookup_deezer(artist: str, title: str) -> list:
             timeout=10,
         )
         if r.status_code != 200:
-            return []
+            return {}
         items = r.json().get("data", [])
         if not items:
-            return []
-        album_id = items[0].get("album", {}).get("id")
-        if not album_id:
-            return []
-        r2 = requests.get(f"https://api.deezer.com/album/{album_id}", timeout=10)
-        if r2.status_code != 200:
-            return []
-        album = r2.json()
-        genres = album.get("genres", {}).get("data", [])
-        return [g["name"] for g in genres if g.get("name")]
+            return {}
+        t = items[0]
+        artist_name = t.get("artist", {}).get("name", "")
+        album_name = t.get("album", {}).get("title", "")
+        title_name = t.get("title", "")
+        genre = ""
+        album_id = t.get("album", {}).get("id")
+        if album_id:
+            r2 = requests.get(f"https://api.deezer.com/album/{album_id}", timeout=10)
+            if r2.status_code == 200:
+                genres = r2.json().get("genres", {}).get("data", [])
+                if genres:
+                    genre = genres[0].get("name", "")
+        return {"genre": genre, "artist": artist_name, "album": album_name, "title": title_name}
     except Exception as e:
-        log.warning(f"  Deezer-Fehler: {e}")
-    return []
+        log.debug(f"  Deezer-Fehler: {e}")
+    return {}
 
 
 # ── Last.fm API ──────────────────────────────────────────────────────────────
@@ -1211,6 +1379,41 @@ def lookup_lastfm(artist: str) -> list:
     return []
 
 
+def search_lastfm_track(artist: str, title: str) -> dict:
+    """Last.fm track.getInfo → full metadata {genre, artist, album, title}."""
+    if not LASTFM_API_KEY:
+        return {}
+    try:
+        r = requests.get(
+            "https://ws.audioscrobbler.com/2.0/",
+            params={
+                "method": "track.getInfo",
+                "artist": artist,
+                "track": title,
+                "api_key": LASTFM_API_KEY,
+                "format": "json",
+                "autocorrect": 1,
+            },
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return {}
+        data = r.json().get("track", {})
+        if not data:
+            return {}
+        artist_info = data.get("artist", {})
+        artist_name = artist_info.get("name", "") if isinstance(artist_info, dict) else str(artist_info)
+        album_info = data.get("album", {})
+        album_name = album_info.get("title", "") if isinstance(album_info, dict) else ""
+        title_name = data.get("name", "")
+        tags = data.get("toptags", {}).get("tag", [])
+        genre = tags[0]["name"] if tags and isinstance(tags, list) else ""
+        return {"genre": genre, "artist": artist_name, "album": album_name, "title": title_name}
+    except Exception as e:
+        log.debug(f"  Last.fm search_track Fehler: {e}")
+    return {}
+
+
 # ── MusicBrainz ──────────────────────────────────────────────────────────────
 
 def lookup_musicbrainz_artist(artist: str) -> tuple[Optional[str], list]:
@@ -1235,6 +1438,41 @@ def lookup_musicbrainz_artist(artist: str) -> tuple[Optional[str], list]:
     except Exception as e:
         log.warning(f"  MusicBrainz-Fehler: {e}")
     return None, []
+
+
+def search_musicbrainz_recording(artist: str, title: str) -> dict:
+    """MusicBrainz recording search → {artist, album, title} or {}."""
+    try:
+        r = requests.get(
+            "https://musicbrainz.org/ws/2/recording/",
+            params={
+                "query": f'recording:"{title}" AND artist:"{artist}"',
+                "fmt": "json",
+                "limit": 3,
+                "inc": "artist-credits releases",
+            },
+            headers=MB_HEADERS,
+            timeout=12,
+        )
+        time.sleep(1.1)
+        if r.status_code != 200:
+            return {}
+        recordings = r.json().get("recordings", [])
+        if not recordings:
+            return {}
+        rec = recordings[0]
+        rec_title = rec.get("title", "")
+        credits = rec.get("artist-credit", [])
+        artist_name = ""
+        if credits:
+            first = credits[0]
+            artist_name = first.get("name") or first.get("artist", {}).get("name", "")
+        releases = rec.get("releases", [])
+        album_name = releases[0].get("title", "") if releases else ""
+        return {"artist": artist_name, "album": album_name, "title": rec_title, "genre": ""}
+    except Exception as e:
+        log.debug(f"  MusicBrainz Recording-Fehler: {e}")
+    return {}
 
 
 # ── AudD Fingerprinting (für Scanner) ────────────────────────────────────────
@@ -1304,6 +1542,38 @@ def _lookup_discogs_genres(artist: str, title: str) -> list[str]:
     return []
 
 
+def search_discogs_track(artist: str, title: str) -> dict:
+    """Discogs release search → full metadata {genre, artist, album, title}."""
+    if not _HAS_DISCOGS:
+        return {}
+    token = os.getenv("DISCOGS_TOKEN", "")
+    if not token:
+        return {}
+    try:
+        d = _discogs_mod.Client("downtify/1.0", user_token=token)
+        results = d.search(f"{artist} {title}", type="release")
+        for rel in results.page(1)[:3]:
+            genres = getattr(rel, "genres", None) or []
+            artists = getattr(rel, "artists", None) or []
+            artist_name = artists[0].name if artists else ""
+            album_name = getattr(rel, "title", "") or ""
+            tracklist = getattr(rel, "tracklist", None) or []
+            track_title = ""
+            for t in tracklist:
+                if title.lower() in t.title.lower():
+                    track_title = t.title
+                    break
+            return {
+                "genre": genres[0] if genres else "",
+                "artist": artist_name,
+                "album": album_name,
+                "title": track_title or title,
+            }
+    except Exception as e:
+        log.debug(f"  Discogs search_track Fehler: {e}")
+    return {}
+
+
 def _acoustid_lookup_genres(path: Path) -> list[str]:
     """Fingerprint lookup via AcoustID → MusicBrainz recording → genres."""
     if not _HAS_ACOUSTID:
@@ -1340,10 +1610,19 @@ def _shazam_identify_sync(path: Path) -> Optional[dict]:
         track = out.get("track", {})
         if not track:
             return None
+        album = None
+        for section in track.get("sections", []):
+            for meta in section.get("metadata", []):
+                if isinstance(meta, dict) and meta.get("title", "").lower() == "album":
+                    album = meta.get("text")
+                    break
+            if album:
+                break
         return {
             "title": track.get("title"),
             "artist": track.get("subtitle"),
             "genre": track.get("genres", {}).get("primary"),
+            "album": album,
         }
     except Exception as e:
         log.debug(f"  Shazam-Fehler: {e}")
@@ -1490,6 +1769,422 @@ class GenreResolver:
             return script
 
         return DEFAULT_FOLDER
+
+    def apply_rules_only(
+        self,
+        artist: str,
+        title: str,
+        raw_genres: list,
+        country: Optional[str] = None,
+        mb_tags: Optional[list] = None,
+    ) -> str:
+        """Apply organizer rules to pre-gathered data, without any API calls."""
+        ag = self._apply_artist_genre_rules(artist)
+        if ag:
+            return ag
+        f = _match_genre_rules(raw_genres, self._genre_rules)
+        if f in ETHNIC_FOLDERS:
+            return f
+        if country and country in self._country_map:
+            return self._country_map[country]
+        if f:
+            return f
+        if mb_tags:
+            f2 = _match_genre_rules(mb_tags, self._genre_rules)
+            if f2:
+                return f2
+        script = _detect_script(title)
+        if script:
+            return script
+        return DEFAULT_FOLDER
+
+
+# ── Voting helpers ────────────────────────────────────────────────────────────
+
+def _norm_voter(s: str) -> str:
+    return re.sub(r'[^a-z0-9]', '', (s or "").lower())
+
+
+def _split_voter_entry(value: str, separators: list) -> list:
+    """Smart-split at separator tokens."""
+    parts = [value.strip()]
+    for sep in sorted(separators, key=len, reverse=True):
+        new_parts = []
+        for p in parts:
+            new_parts.extend(s.strip() for s in p.split(sep) if s.strip())
+        parts = new_parts
+    return parts
+
+
+def _vote_text_field(values: list, separators: list) -> tuple:
+    """Vote for Artist/Album/Title. Returns (winner, quality)."""
+    all_entries: list = []
+    for v in values:
+        if v:
+            all_entries.extend(_split_voter_entry(v, separators))
+    if not all_entries:
+        return "", "niedrig"
+    counter = Counter(all_entries)
+    total = max(len(values), 1)
+    winner, n = counter.most_common(1)[0]
+    ratio = n / total
+    if ratio >= 5 / 6:
+        quality = "sehr hoch"
+    elif ratio >= 4 / 6:
+        quality = "hoch"
+    elif ratio >= 2 / 6:
+        quality = "mittel"
+    else:
+        quality = "niedrig"
+    return winner, quality
+
+
+def _vote_genre_field(values: list) -> tuple:
+    """Vote for Genre: words appearing >3x. Returns (winner, has_clear)."""
+    words: list = []
+    for v in values:
+        if v:
+            words.extend(re.sub(r'[^a-z0-9 ]', ' ', v.lower()).split())
+    if not words:
+        return "", False
+    counter = Counter(words)
+    top = [w for w, n in counter.most_common() if n > 3]
+    return " ".join(top), bool(top)
+
+
+def _fuzzy_similar(a: str, b: str, threshold: float = 0.75) -> bool:
+    na = re.sub(r'[^a-z0-9]', '', (a or "").lower())
+    nb = re.sub(r'[^a-z0-9]', '', (b or "").lower())
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
+    return shorter in longer and len(shorter) / len(longer) >= threshold
+
+
+# ── MetadataVoter ─────────────────────────────────────────────────────────────
+
+class MetadataVoter:
+    """
+    11-Schritt Voting-Pipeline für Metadaten-Auflösung.
+    Queries alle Quellen parallel, wählt per Mehrheitsentscheid,
+    nutzt MusicBrainz und Fingerprint als Fallback.
+    """
+
+    QUALITY_DONE = {"sehr hoch", "hoch"}
+    FIELDS = ("genre", "artist", "album", "title")
+
+    def __init__(
+        self,
+        db: OrganizerDB,
+        spotify: SpotifyClient,
+        resolver: GenreResolver,
+        separators: Optional[list] = None,
+    ):
+        self.db = db
+        self.spotify = spotify
+        self.resolver = resolver
+        self.separators = separators or DEFAULT_SEPARATORS
+        self.audit_log: list = []
+
+    def _log_step(self, step: object, name: str, **kwargs: object) -> None:
+        entry: dict = {"step": step, "name": name}
+        entry.update(kwargs)
+        self.audit_log.append(entry)
+
+    def resolve(
+        self,
+        path: Path,
+        tags: dict,
+        source: str,
+        track_id: Optional[str] = None,
+    ) -> dict:
+        """Full 11-Schritt pipeline. Returns resolved metadata dict."""
+        self.audit_log = []
+        orig = {
+            "orig_genre": tags.get("genre") or "",
+            "orig_artist": tags.get("artist") or "",
+            "orig_album": tags.get("album") or "",
+            "orig_title": tags.get("title") or path.stem,
+        }
+
+        # Schritt 0: Fingerprint wenn Tags fehlen
+        tags = self._step0_fingerprint(path, tags, source)
+        self._log_step(0, "Tags + Fingerprint", values={
+            "genre": tags.get("genre", ""), "artist": tags.get("artist", ""),
+            "album": tags.get("album", ""), "title": tags.get("title", ""),
+        })
+
+        artist = tags.get("artist", "")
+        title_raw = tags.get("title", "") or path.stem
+        if not artist or not title_raw:
+            return self._fallback(tags, orig)
+
+        # Schritt 0.5: Cache-Lookup
+        ak = _norm_voter(artist)
+        tk = _norm_voter(title_raw)
+        cached = self.db.get_track_cache(ak, tk)
+        if cached:
+            genre_raw = cached.get("genre_raw", "")
+            country = cached.get("country")
+            mb_tags_list: list = cached.get("mb_tags", [])
+            final_genre = self.resolver.apply_rules_only(
+                artist, title_raw, [genre_raw] if genre_raw else [], country, mb_tags_list
+            )
+            result = {**cached, "genre": final_genre, "cache_hit": True, "meta_source": "Cache (Schritt 0.5)"}
+            result.update(orig)
+            if final_genre != cached.get("genre"):
+                self.db.set_track_cache(ak, tk, {**cached, "genre": final_genre})
+            self._log_step(None, "Cache-Hit", action="Schritte 1-10 übersprungen")
+            self._save_audit(track_id, {"steps": self.audit_log, "cache": {"action": "hit"}})
+            return result
+
+        # Schritt 1: Alle Quellen parallel befragen
+        sources = self._step1_query_sources(artist, title_raw, tags)
+        self._log_step(1, "6 Quellen befragt", sources=sources)
+
+        # Schritt 2-4: Voting
+        ergebnis1, status1, counts = self._step2_4_vote(sources)
+        self._log_step(2, "Voting", counts=counts, ergebnis1=ergebnis1, status1=status1)
+
+        # Schritt 5: Abgeschlossene Felder
+        result_fields = {k: v for k, v in ergebnis1.items() if status1.get(k) == "abgeschlossen"}
+        open1 = [k for k in self.FIELDS if status1.get(k) != "abgeschlossen"]
+        self._log_step(5, "Status 1", written=list(result_fields.keys()), open=open1)
+
+        country = None
+        mb_tags_list = []
+
+        # Schritt 6-7: MusicBrainz für offene Felder
+        if open1:
+            mb_result = search_musicbrainz_recording(artist, title_raw)
+            country_cached = self.db.get_cached_country(artist)
+            if country_cached is None:
+                mb_artist_country, mb_tags_list = lookup_musicbrainz_artist(artist)
+                country = mb_artist_country
+                self.db.cache_country(artist, country or "")
+            else:
+                country = country_cached if country_cached else None
+
+            self._log_step(6, "MusicBrainz Recording", result=mb_result, country=country)
+
+            ergebnis2, status2 = self._step7_compare_mb(ergebnis1, mb_result, open1)
+            result_fields.update({k: v for k, v in ergebnis2.items() if status2.get(k) == "abgeschlossen"})
+            open2 = [k for k in open1 if status2.get(k) != "abgeschlossen"]
+            self._log_step(7, "Status 2 MB Vergleich", written=[k for k in open1 if k not in open2], open=open2)
+
+            # Schritt 8-9: Fingerprint für noch offene Felder
+            if open2:
+                fp_result = self._step8_fingerprint(path, open2)
+                self._log_step(8, "Fingerprint für offene Felder", result=fp_result)
+                ergebnis4 = self._step9_final(ergebnis1, ergebnis2, fp_result, open2)
+                result_fields.update(ergebnis4)
+                self._log_step(9, "Ergebnis 4", ergebnis4=ergebnis4)
+        else:
+            ergebnis2 = {}
+
+        for field, default in [("genre", ""), ("artist", "Unbekannt"), ("album", "Unbekannt"), ("title", "Unbekannt")]:
+            if not result_fields.get(field):
+                result_fields[field] = default
+
+        # Schritt 10: org_* + Quellenangabe
+        genre_raw = result_fields.get("genre", "")
+        meta_source = self._determine_source(status1)
+        self._log_step(10, "org_* Felder", org=result_fields, source=meta_source)
+
+        # Schritt 11: Organizer-Rules
+        final_genre = self.resolver.apply_rules_only(
+            result_fields.get("artist", ""),
+            result_fields.get("title", ""),
+            [genre_raw] if genre_raw else [],
+            country,
+            mb_tags_list,
+        )
+        rule_changes = []
+        if final_genre != genre_raw:
+            rule_changes.append({"field": "genre", "before": genre_raw, "after": final_genre})
+        result_fields["genre"] = final_genre
+        self._log_step(11, "Organizer-Rules", rules_applied=rule_changes)
+
+        # Schritt 12: Cache schreiben
+        cache_entry: dict = {
+            **result_fields,
+            "genre_raw": genre_raw,
+            "country": country,
+            "mb_tags": mb_tags_list[:5],
+        }
+        self.db.set_track_cache(ak, tk, cache_entry)
+        if genre_raw:
+            self.db.cache_genres(artist, [genre_raw])
+        self._log_step(None, "Cache", action="written", key=f"{ak}::{tk}")
+
+        output: dict = {**result_fields, "meta_source": meta_source, "cache_hit": False}
+        output.update(orig)
+        self._save_audit(track_id, {
+            "steps": self.audit_log,
+            "cache": {"action": "written", "key": f"{ak}::{tk}", "ttl_days": 30},
+        })
+        return output
+
+    def _step0_fingerprint(self, path: Path, tags: dict, source: str) -> dict:
+        if tags.get("title") and tags.get("artist"):
+            return tags
+        if source not in ("scanner", "download"):
+            return tags
+        log.info("  Tags unvollständig → Fingerprint (Schritt 0)...")
+        shazam = _shazam_identify_sync(path)
+        if shazam:
+            for k in ("title", "artist", "album", "genre"):
+                if shazam.get(k) and not tags.get(k):
+                    tags[k] = shazam[k]
+        if not (tags.get("title") and tags.get("artist")):
+            acoustid_genres = _acoustid_lookup_genres(path)
+            if acoustid_genres and not tags.get("genre"):
+                tags["genre"] = acoustid_genres[0]
+        if not (tags.get("title") and tags.get("artist")):
+            audd = audd_identify(path)
+            if audd:
+                for k in ("title", "artist", "album"):
+                    if audd.get(k) and not tags.get(k):
+                        tags[k] = audd[k]
+        return tags
+
+    def _step1_query_sources(self, artist: str, title: str, tags: dict) -> dict:
+        file_meta = {
+            "genre": tags.get("genre", ""),
+            "artist": tags.get("artist", ""),
+            "album": tags.get("album", ""),
+            "title": tags.get("title", ""),
+        }
+
+        def q_spotify() -> dict:
+            return self.spotify.search_track(artist, title)
+
+        def q_deezer() -> dict:
+            return search_deezer_track(artist, title)
+
+        def q_lastfm() -> dict:
+            return search_lastfm_track(artist, title)
+
+        def q_discogs() -> dict:
+            return search_discogs_track(artist, title)
+
+        def q_soundcloud() -> dict:
+            try:
+                from .soundcloud import search_soundcloud_track
+                return search_soundcloud_track(artist, title)
+            except Exception:
+                return {}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+            f_sp = ex.submit(q_spotify)
+            f_dz = ex.submit(q_deezer)
+            f_lf = ex.submit(q_lastfm)
+            f_dc = ex.submit(q_discogs)
+            f_sc = ex.submit(q_soundcloud)
+            sp = _safe_result(f_sp) or {}
+            dz = _safe_result(f_dz) or {}
+            lf = _safe_result(f_lf) or {}
+            dc = _safe_result(f_dc) or {}
+            sc = _safe_result(f_sc) or {}
+
+        log.info(
+            f"  Spotify: {sp.get('genre') or '—'} | Deezer: {dz.get('genre') or '—'} | "
+            f"Last.fm: {lf.get('genre') or '—'} | Discogs: {dc.get('genre') or '—'} | "
+            f"SC: {sc.get('genre') or '—'}"
+        )
+        return {"file": file_meta, "spotify": sp, "deezer": dz, "lastfm": lf, "discogs": dc, "soundcloud": sc}
+
+    def _step2_4_vote(self, sources: dict) -> tuple:
+        source_list = list(sources.values())
+        counts: dict = {}
+        ergebnis1: dict = {}
+        status1: dict = {}
+
+        for field in ("artist", "album", "title"):
+            vals = [s.get(field, "") for s in source_list]
+            winner, quality = _vote_text_field(vals, self.separators)
+            ergebnis1[field] = winner
+            status1[field] = "abgeschlossen" if quality in self.QUALITY_DONE else "offen"
+            counts[field] = {"quality": quality, "winner": winner}
+
+        genre_vals = [s.get("genre", "") for s in source_list]
+        winner_g, has_clear = _vote_genre_field(genre_vals)
+        ergebnis1["genre"] = winner_g
+        status1["genre"] = "abgeschlossen" if has_clear else "offen"
+        counts["genre"] = {"has_clear": has_clear, "winner": winner_g}
+
+        return ergebnis1, status1, counts
+
+    def _step7_compare_mb(self, ergebnis1: dict, mb: dict, open_fields: list) -> tuple:
+        ergebnis2: dict = {}
+        status2: dict = {}
+        for field in open_fields:
+            e1_val = ergebnis1.get(field, "")
+            mb_val = mb.get(field, "")
+            if mb_val and e1_val and _fuzzy_similar(e1_val, mb_val):
+                ergebnis2[field] = e1_val
+                status2[field] = "abgeschlossen"
+            elif mb_val:
+                ergebnis2[field] = mb_val
+                status2[field] = "abgeschlossen"
+            else:
+                ergebnis2[field] = e1_val
+                status2[field] = "offen"
+        return ergebnis2, status2
+
+    def _step8_fingerprint(self, path: Path, open_fields: list) -> dict:
+        result: dict = {}
+        shazam = _shazam_identify_sync(path)
+        if shazam:
+            field_map = {"title": "title", "artist": "artist", "album": "album", "genre": "genre"}
+            for field in open_fields:
+                val = shazam.get(field_map.get(field, field))
+                if val:
+                    result[field] = val
+        if "genre" in open_fields and "genre" not in result:
+            genres = _acoustid_lookup_genres(path)
+            if genres:
+                result["genre"] = genres[0]
+        return result
+
+    def _step9_final(self, e1: dict, e2: dict, e3: dict, open_fields: list) -> dict:
+        out: dict = {}
+        for field in open_fields:
+            out[field] = e3.get(field) or e2.get(field) or e1.get(field) or ""
+        return out
+
+    def _determine_source(self, status1: dict) -> str:
+        done = [f for f in self.FIELDS if status1.get(f) == "abgeschlossen"]
+        if len(done) == 4:
+            return "Schritt 5 / Ergebnis 1 (Voting)"
+        if len(done) >= 2:
+            return "Schritt 7 / Ergebnis 2 (MusicBrainz)"
+        return "Schritt 9 / Ergebnis 4"
+
+    def _save_audit(self, track_id: Optional[str], audit: dict) -> None:
+        if track_id:
+            self.db.save_audit(track_id, json.dumps(audit))
+
+    def _fallback(self, tags: dict, orig: dict) -> dict:
+        return {
+            "genre": DEFAULT_FOLDER,
+            "artist": tags.get("artist") or "Unbekannt",
+            "album": tags.get("album") or "Unbekannt",
+            "title": tags.get("title") or orig.get("orig_title") or "Unbekannt",
+            "meta_source": "Kein Artist/Title erkannt",
+            "cache_hit": False,
+            **orig,
+        }
+
+
+def _safe_result(future: concurrent.futures.Future, timeout: float = 15.0) -> object:
+    try:
+        return future.result(timeout=timeout)
+    except Exception as e:
+        log.debug(f"  Quelle Fehler: {e}")
+        return {}
 
 
 # ── Path Building & bestof-Migration ─────────────────────────────────────────
@@ -1642,6 +2337,7 @@ def process_file(  # noqa: PLR0914
     resolver: GenreResolver,
     *,
     delete_after_move: bool = False,
+    voter: Optional[MetadataVoter] = None,
 ) -> bool:
     """
     Verarbeitet eine einzelne Audio-Datei.
@@ -1651,70 +2347,49 @@ def process_file(  # noqa: PLR0914
 
     tags = _read_tags(path)
 
-    # pfad_* filename convention → skip all API lookups
+    # pfad_* filename convention → skip voting pipeline
     pfad = _parse_pfad_filename(path)
     if pfad:
-        log.info("  pfad_-Dateiname erkannt, überspringe API-Lookup")
+        log.info("  pfad_-Dateiname erkannt, überspringe Voting-Pipeline")
         tags = {**tags, **pfad}
-
-    # Scanner: bei fehlenden Tags → Fingerprint-Staircase, AudD nur als letzter Ausweg
-    if source == "scanner" and not pfad and (not tags.get("title") or not tags.get("artist")):
-        log.info("  Tags fehlen, versuche Fingerprint-Erkennung (Shazam → AcoustID → AudD)...")
-        ident: Optional[dict] = None
-
-        # 1. Shazam
-        shazam_result = _shazam_identify_sync(path)
-        if shazam_result and shazam_result.get("artist"):
-            log.info(f"  Shazam: {shazam_result.get('artist')} – {shazam_result.get('title')}")
-            ident = shazam_result
-            if shazam_result.get("genre") and not tags.get("genre"):
-                tags["genre"] = shazam_result["genre"]
-
-        # 2. AcoustID (if Shazam didn't resolve or genre still missing)
-        if not ident:
-            acoustid_genres = _acoustid_lookup_genres(path)
-            if acoustid_genres and not tags.get("genre"):
-                tags["genre"] = acoustid_genres[0]
-
-        # 3. AudD (absolute last resort, respects quota cooldown)
-        if not ident:
-            ident = audd_identify(path)
-            if ident:
-                log.info(f"  AudD: {ident.get('artist')} – {ident.get('title')}")
-
-        if ident:
-            tags["title"] = tags.get("title") or ident.get("title")
-            tags["artist"] = tags.get("artist") or ident.get("artist")
-            tags["album"] = tags.get("album") or ident.get("album")
-            tags["spotify_id"] = tags.get("spotify_id") or ident.get("spotify_id")
-        else:
-            log.warning("  Fingerprint-Erkennung erfolglos")
-
-    orig_genre = tags.get("genre") or ""
-    raw_artist = tags.get("artist") or "Sonstiges"
-    # Apply artist alias rules before any further processing
-    raw_artist = resolver.apply_artist_alias(raw_artist)
-    artist_p = _primary_artist(raw_artist)
-    title = _sanitize(tags.get("title") or path.stem)
-    artist = _sanitize(artist_p, "Sonstiges")
-    album = _sanitize(tags.get("album") or "Unbekannt", "Unbekannt")
-
-    if pfad and pfad.get('genre'):
-        genre = _sanitize(pfad['genre'], DEFAULT_FOLDER)
+        orig_genre = tags.get("genre") or ""
+        orig_artist = tags.get("artist") or ""
+        orig_album = tags.get("album") or ""
+        orig_title = tags.get("title") or path.stem
+        if source == "scanner":
+            scanner_spotify_id = tags.get("spotify_id") or f"scanner:{path.stem}"
+            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre)
+        raw_artist = resolver.apply_artist_alias(tags.get("artist") or "Sonstiges")
+        artist_p = _primary_artist(raw_artist)
+        title = _sanitize(tags.get("title") or path.stem)
+        artist = _sanitize(artist_p, "Sonstiges")
+        album = _sanitize(tags.get("album") or "Unbekannt", "Unbekannt")
+        genre = _sanitize(pfad.get("genre") or DEFAULT_FOLDER, DEFAULT_FOLDER)
     else:
-        genre = resolver.resolve(artist_p, tags.get("title") or "", embedded_genre=orig_genre)
-        genre = _sanitize(genre, DEFAULT_FOLDER)
-        # If genre still unresolved, try AcoustID fingerprint as last resort
-        if genre == DEFAULT_FOLDER and source == "scanner":
-            fp_genres = _acoustid_lookup_genres(path)
-            if fp_genres:
-                f = _match_genre_rules(fp_genres, resolver._genre_rules)
-                if f:
-                    log.info(f"  AcoustID Genre-Fallback: {fp_genres[0]} → '{f}'")
-                    genre = f
-    # Override with raw API genres if resolver found better info
-    if resolver.last_raw_genres:
-        orig_genre = ', '.join(resolver.last_raw_genres)
+        # ── Voting Pipeline ───────────────────────────────────────────────────
+        if voter is None:
+            voter = MetadataVoter(db, SpotifyClient(), resolver)
+
+        track_id = tags.get("spotify_id") or f"scanner:{path.stem}"
+        resolved = voter.resolve(path, tags, source, track_id=track_id)
+
+        orig_genre = resolved.get("orig_genre") or ""
+        orig_artist = resolved.get("orig_artist") or ""
+        orig_album = resolved.get("orig_album") or ""
+        orig_title = resolved.get("orig_title") or path.stem
+
+        # Scanner: register in monitor.db before the move
+        if source == "scanner":
+            scanner_spotify_id = tags.get("spotify_id") or f"scanner:{path.stem}"
+            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre)
+
+        raw_artist = resolver.apply_artist_alias(resolved.get("artist") or "Sonstiges")
+        artist_p = _primary_artist(raw_artist)
+        title = _sanitize(resolved.get("title") or path.stem)
+        artist = _sanitize(artist_p, "Sonstiges")
+        album = _sanitize(resolved.get("album") or "Unbekannt", "Unbekannt")
+        genre = _sanitize(resolved.get("genre") or DEFAULT_FOLDER, DEFAULT_FOLDER)
+        log.info(f"  meta_source: {resolved.get('meta_source', '—')} | cache_hit: {resolved.get('cache_hit', False)}")
 
     log.info(f"  → {genre} / {artist} / {album} / {title}")
 
@@ -1727,11 +2402,11 @@ def process_file(  # noqa: PLR0914
         log.error(f"  ✗ Move fehlgeschlagen: {e}")
         return False
 
-    # Organizer-Metadaten als Kommentar in die Datei schreiben
     _write_organizer_comment(target, genre, artist, album, title)
-
-    # Downtify Monitor DB updaten → verhindert Re-Download
-    _nullify_monitor_filename(path)
+    _update_monitor_metadata(
+        path, genre, artist, album, title,
+        orig_genre=orig_genre, orig_artist=orig_artist, orig_album=orig_album, orig_title=orig_title,
+    )
     return True
 
 
@@ -1755,8 +2430,14 @@ def _cleanup_empty_scanner_subdirs(base: Path) -> None:
                 log.warning(f"  Subfolder-Cleanup fehlgeschlagen: {e}")
 
 
-def _scan_dir(directory: Path, db: OrganizerDB, resolver: GenreResolver,
-              source: str, delete_after_move: bool) -> int:
+def _scan_dir(
+    directory: Path,
+    db: OrganizerDB,
+    resolver: GenreResolver,
+    source: str,
+    delete_after_move: bool,
+    voter: Optional[MetadataVoter] = None,
+) -> int:
     if not directory.exists():
         return 0
     files = [
@@ -1773,31 +2454,36 @@ def _scan_dir(directory: Path, db: OrganizerDB, resolver: GenreResolver,
     success = 0
     for f in files:
         try:
-            if process_file(f, source, db, resolver, delete_after_move=delete_after_move):
+            if process_file(f, source, db, resolver, delete_after_move=delete_after_move, voter=voter):
                 success += 1
         except Exception as e:
             log.error(f"Fehler bei {f.name}: {e}")
 
-    # Remove empty subdirs (and any non-audio leftovers) after processing
     _cleanup_empty_scanner_subdirs(directory)
     return success
 
 
-def _download_watcher_loop(db: OrganizerDB, resolver: GenreResolver, stop: threading.Event) -> None:
+def _download_watcher_loop(
+    db: OrganizerDB, resolver: GenreResolver, stop: threading.Event,
+    voter: Optional[MetadataVoter] = None,
+) -> None:
     log.info(f"Download-Watcher: {DOWNLOAD_DIR} → {MUSIK_DIR}")
     while not stop.is_set():
         try:
-            _scan_dir(DOWNLOAD_DIR, db, resolver, "download", delete_after_move=False)
+            _scan_dir(DOWNLOAD_DIR, db, resolver, "download", delete_after_move=False, voter=voter)
         except Exception as e:
             log.error(f"Download-Scan Fehler: {e}")
         stop.wait(POLL_INTERVAL)
 
 
-def _scanner_loop(db: OrganizerDB, resolver: GenreResolver, stop: threading.Event) -> None:
+def _scanner_loop(
+    db: OrganizerDB, resolver: GenreResolver, stop: threading.Event,
+    voter: Optional[MetadataVoter] = None,
+) -> None:
     log.info(f"Scanner-Watcher: {SCANNER_DIR} → {MUSIK_DIR}")
     while not stop.is_set():
         try:
-            _scan_dir(SCANNER_DIR, db, resolver, "scanner", delete_after_move=True)
+            _scan_dir(SCANNER_DIR, db, resolver, "scanner", delete_after_move=True, voter=voter)
         except Exception as e:
             log.error(f"Scanner Fehler: {e}")
         stop.wait(POLL_INTERVAL)
@@ -1813,6 +2499,7 @@ class OrganizerService:
         self.db = OrganizerDB(DB_PATH)
         self.spotify = SpotifyClient()
         self.resolver = GenreResolver(self.db, self.spotify)
+        self.voter = MetadataVoter(self.db, self.spotify, self.resolver)
         self.stop = threading.Event()
         self.threads: list[threading.Thread] = []
 
@@ -1825,12 +2512,13 @@ class OrganizerService:
         log.info(f"Last.fm:          {'verbunden' if LASTFM_API_KEY else 'fehlt'}")
         log.info(f"AudD:             {'verbunden' if AUDD_API_TOKEN else 'fehlt'}")
         log.info(f"Polling:          {POLL_INTERVAL}s | Cooldown: {FILE_COOLDOWN}s")
+        log.info(f"Soundcloud:       {'verbunden' if SOUNDCLOUD_CLIENT_ID else 'fehlt'}")
         log.info("=" * 60)
 
         if ENABLE_DOWNLOAD_WATCHER:
             t = threading.Thread(
                 target=_download_watcher_loop,
-                args=(self.db, self.resolver, self.stop),
+                args=(self.db, self.resolver, self.stop, self.voter),
                 name="organizer-downloads",
                 daemon=True,
             )
@@ -1840,7 +2528,7 @@ class OrganizerService:
         if ENABLE_SCANNER:
             t = threading.Thread(
                 target=_scanner_loop,
-                args=(self.db, self.resolver, self.stop),
+                args=(self.db, self.resolver, self.stop, self.voter),
                 name="organizer-scanner",
                 daemon=True,
             )

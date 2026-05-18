@@ -3,6 +3,13 @@
     <Navbar />
     <Settings />
 
+    <AuditModal
+      :show="auditModal"
+      :track-id="auditTrackId"
+      :track-name="auditTrackName"
+      @close="auditModal = false"
+    />
+
     <div class="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <!-- Header -->
       <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -121,7 +128,14 @@
             </span>
           </div>
 
-          <!-- Delete -->
+          <button
+            v-if="item.track_spotify_id && item.genre"
+            class="icon-btn text-base-content/30 hover:text-primary hover:bg-primary/10 shrink-0"
+            @click="openAudit(item)"
+            :title="t('audit.tooltip')"
+          >
+            <Icon icon="clarity:eye-line" class="h-4 w-4" />
+          </button>
           <button
             class="icon-btn text-error/70 hover:text-error hover:bg-error/10 shrink-0"
             :disabled="deleting[item.id] === true"
@@ -190,6 +204,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { Icon } from '@iconify/vue'
 import Navbar from '/src/components/Navbar.vue'
 import Settings from '/src/components/Settings.vue'
+import AuditModal from '/src/components/AuditModal.vue'
 import API from '/src/model/api'
 import { useI18n } from '/src/i18n'
 
@@ -206,6 +221,16 @@ const loading = ref(false)
 const error = ref('')
 const successMsg = ref('')
 const deleting = ref({})
+
+const auditModal = ref(false)
+const auditTrackId = ref('')
+const auditTrackName = ref('')
+
+function openAudit(item) {
+  auditTrackId.value = item.track_spotify_id || ''
+  auditTrackName.value = displayFilename(item) || item.track_spotify_id || ''
+  auditModal.value = true
+}
 
 let searchTimeout = null
 
