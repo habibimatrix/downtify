@@ -81,7 +81,7 @@ def _setup_logging(level: str) -> None:
         _log.propagate = False
 
 
-DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_DIR', '/downloads'))
+DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_DIR', '/data/cache'))
 DATABASE_DIR = Path('/data')
 WEB_GUI_LOCATION = os.getenv('WEB_GUI_LOCATION', '/downtify/frontend/dist')
 DEFAULT_HOST = os.getenv('HOST', '0.0.0.0')
@@ -241,7 +241,7 @@ def build_app() -> FastAPI:
         # Organizer-Service starten (Auto-Organisation + Scanner-Ordner)
         start_organizer()
 
-    @app.get('/list')
+    @app.get('/api/files')
     def list_downloads() -> list[str]:
         audio_exts = {'.mp3', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}
         base = DOWNLOAD_DIR.resolve()
@@ -259,7 +259,7 @@ def build_app() -> FastAPI:
         files.sort()
         return files
 
-    @app.delete('/delete')
+    @app.delete('/api/files/delete')
     def delete_download(file: str) -> dict:
         # Resolve and confine to DOWNLOAD_DIR to prevent path traversal.
         base = DOWNLOAD_DIR.resolve()
@@ -276,7 +276,7 @@ def build_app() -> FastAPI:
             return {'deleted': False, 'error': str(exc)}
         return {'deleted': True}
 
-    @app.get('/cover')
+    @app.get('/api/cover')
     def get_cover(file: str):
         # Resolve and confine to DOWNLOAD_DIR to prevent path traversal.
         base = DOWNLOAD_DIR.resolve()

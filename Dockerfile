@@ -38,7 +38,8 @@ RUN apk add --no-cache \
     ffmpeg \
     shadow \
     su-exec \
-    tini
+    tini \
+    chromaprint
 
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin

@@ -19,7 +19,11 @@ function useSearchManager() {
       str.includes('://open.spotify.com/album/') ||
       str.includes('://open.spotify.com/playlist/') ||
       str.includes('://open.spotify.com/show/') ||
-      str.includes('://open.spotify.com/artist/')
+      str.includes('://open.spotify.com/artist/') ||
+      str.includes('youtube.com/watch') ||
+      str.includes('youtu.be/') ||
+      str.includes('music.youtube.com/watch') ||
+      str.includes('soundcloud.com/')
     ) {
       return false
     }
@@ -29,7 +33,11 @@ function useSearchManager() {
     return (
       str.includes('://open.spotify.com/track/') ||
       str.includes('://open.spotify.com/album/') ||
-      str.includes('://open.spotify.com/playlist/')
+      str.includes('://open.spotify.com/playlist/') ||
+      str.includes('youtube.com/watch') ||
+      str.includes('youtu.be/') ||
+      str.includes('music.youtube.com/watch') ||
+      str.includes('soundcloud.com/')
     )
   }
 

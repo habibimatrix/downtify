@@ -13,6 +13,7 @@ Konfiguration ausschließlich via Umgebungsvariablen.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -32,6 +33,27 @@ from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
+
+try:
+    import acoustid as _acoustid_mod  # type: ignore[import-untyped]
+    _HAS_ACOUSTID = True
+except ImportError:
+    _acoustid_mod = None  # type: ignore[assignment]
+    _HAS_ACOUSTID = False
+
+try:
+    import discogs_client as _discogs_mod  # type: ignore[import-untyped]
+    _HAS_DISCOGS = True
+except ImportError:
+    _discogs_mod = None  # type: ignore[assignment]
+    _HAS_DISCOGS = False
+
+try:
+    from shazamio import Shazam as _Shazam  # type: ignore[import-untyped]
+    _HAS_SHAZAM = True
+except ImportError:
+    _Shazam = None  # type: ignore[assignment, misc]
+    _HAS_SHAZAM = False
 
 # ── Konfiguration ─────────────────────────────────────────────────────────────
 
@@ -1217,10 +1239,20 @@ def lookup_musicbrainz_artist(artist: str) -> tuple[Optional[str], list]:
 
 # ── AudD Fingerprinting (für Scanner) ────────────────────────────────────────
 
+_audd_quota_exhausted: bool = False
+_audd_quota_reset_time: float = 0.0
+
+
 def audd_identify(path: Path) -> Optional[dict]:
     """Identifiziert eine Datei via AudD. Gibt {artist, title, album} zurück."""
+    global _audd_quota_exhausted, _audd_quota_reset_time
     if not AUDD_API_TOKEN:
         return None
+    if _audd_quota_exhausted:
+        if time.time() < _audd_quota_reset_time:
+            log.info("  AudD-Quota erschöpft, überspringe")
+            return None
+        _audd_quota_exhausted = False
     try:
         with open(path, "rb") as f:
             r = requests.post(
@@ -1231,7 +1263,14 @@ def audd_identify(path: Path) -> Optional[dict]:
             )
         if r.status_code != 200:
             return None
-        result = r.json().get("result")
+        data = r.json()
+        err = data.get("error") or {}
+        if err.get("error_code") == 901 or err.get("error_code") == '901':
+            _audd_quota_exhausted = True
+            _audd_quota_reset_time = time.time() + 3600
+            log.warning("  AudD-Quota erschöpft, 1h Cooldown")
+            return None
+        result = data.get("result")
         if not result:
             return None
         return {
@@ -1243,6 +1282,72 @@ def audd_identify(path: Path) -> Optional[dict]:
     except Exception as e:
         log.warning(f"  AudD-Fehler: {e}")
     return None
+
+
+def _lookup_discogs_genres(artist: str, title: str) -> list[str]:
+    """Lookup genres via Discogs API. Requires DISCOGS_TOKEN env var."""
+    if not _HAS_DISCOGS:
+        return []
+    token = os.getenv("DISCOGS_TOKEN", "")
+    if not token:
+        return []
+    try:
+        d = _discogs_mod.Client("downtify/1.0", user_token=token)
+        results = d.search(f"{artist} {title}", type="release")
+        for r in results.page(1)[:3]:
+            genres = getattr(r, "genres", None) or []
+            if genres:
+                log.info(f"  Discogs Genres: {genres}")
+                return list(genres)
+    except Exception as e:
+        log.debug(f"  Discogs-Fehler: {e}")
+    return []
+
+
+def _acoustid_lookup_genres(path: Path) -> list[str]:
+    """Fingerprint lookup via AcoustID → MusicBrainz recording → genres."""
+    if not _HAS_ACOUSTID:
+        return []
+    api_key = os.getenv("ACOUSTID_API_KEY", "")
+    if not api_key:
+        return []
+    try:
+        results = list(_acoustid_mod.match(api_key, str(path)))
+        for score, recording_id, _title, _artist in results:
+            if score > 0.8 and recording_id:
+                mb_url = f"https://musicbrainz.org/ws/2/recording/{recording_id}?inc=genres&fmt=json"
+                resp = requests.get(mb_url, headers=MB_HEADERS, timeout=10)
+                if resp.status_code == 200:
+                    genres = [g.get("name", "") for g in resp.json().get("genres", [])]
+                    if genres:
+                        log.info(f"  AcoustID Genres: {genres}")
+                        return genres
+    except Exception as e:
+        log.debug(f"  AcoustID-Fehler: {e}")
+    return []
+
+
+def _shazam_identify_sync(path: Path) -> Optional[dict]:
+    """Shazam song recognition (sync wrapper around async shazamio)."""
+    if not _HAS_SHAZAM:
+        return None
+    try:
+        async def _run():
+            shazam = _Shazam()
+            return await shazam.recognize(str(path))
+
+        out = asyncio.run(_run())
+        track = out.get("track", {})
+        if not track:
+            return None
+        return {
+            "title": track.get("title"),
+            "artist": track.get("subtitle"),
+            "genre": track.get("genres", {}).get("primary"),
+        }
+    except Exception as e:
+        log.debug(f"  Shazam-Fehler: {e}")
+        return None
 
 
 # ── Genre-Ermittlung mit voller Kette ────────────────────────────────────────
@@ -1344,6 +1449,11 @@ class GenreResolver:
                 if lastfm_genres:
                     log.info(f"  Last.fm Tags: {lastfm_genres[:5]}")
                     spotify_genres = lastfm_genres
+            if not spotify_genres:
+                # Discogs (text-based, no fingerprint needed)
+                discogs_genres = _lookup_discogs_genres(artist, title)
+                if discogs_genres:
+                    spotify_genres = discogs_genres
             self.db.cache_genres(artist, spotify_genres)
 
         # Ethnische Genres haben absolute Priorität
@@ -1506,7 +1616,26 @@ def _file_id(path: Path, tags: dict) -> str:
         return f"file:{path.name}"
 
 
-def process_file(
+def _parse_pfad_filename(path: Path) -> Optional[dict]:
+    """Parse pfad_genre_artist_album_title.ext → tag dict, or None if no pfad_ prefix."""
+    stem = path.stem
+    if not stem.lower().startswith('pfad_'):
+        return None
+    parts = stem[5:].split('_', 3)
+    while len(parts) < 4:
+        parts.append('-')
+    genre, artist, album, title = parts
+    return {
+        'genre':  genre if genre != '-' else '',
+        'artist': artist if artist != '-' else '',
+        'album':  album if album != '-' else '',
+        'title':  title if title != '-' else path.stem,
+        'spotify_id': f'pfad:{path.stem}',
+        'pfad_parsed': True,
+    }
+
+
+def process_file(  # noqa: PLR0914
     path: Path,
     source: str,
     db: OrganizerDB,
@@ -1522,19 +1651,46 @@ def process_file(
 
     tags = _read_tags(path)
 
-    # Scanner: bei fehlenden Tags → AudD Fingerprinting
-    if source == "scanner" and (not tags.get("title") or not tags.get("artist")):
-        log.info("  Tags fehlen, versuche AudD-Erkennung...")
-        ident = audd_identify(path)
+    # pfad_* filename convention → skip all API lookups
+    pfad = _parse_pfad_filename(path)
+    if pfad:
+        log.info("  pfad_-Dateiname erkannt, überspringe API-Lookup")
+        tags = {**tags, **pfad}
+
+    # Scanner: bei fehlenden Tags → Fingerprint-Staircase, AudD nur als letzter Ausweg
+    if source == "scanner" and not pfad and (not tags.get("title") or not tags.get("artist")):
+        log.info("  Tags fehlen, versuche Fingerprint-Erkennung (Shazam → AcoustID → AudD)...")
+        ident: Optional[dict] = None
+
+        # 1. Shazam
+        shazam_result = _shazam_identify_sync(path)
+        if shazam_result and shazam_result.get("artist"):
+            log.info(f"  Shazam: {shazam_result.get('artist')} – {shazam_result.get('title')}")
+            ident = shazam_result
+            if shazam_result.get("genre") and not tags.get("genre"):
+                tags["genre"] = shazam_result["genre"]
+
+        # 2. AcoustID (if Shazam didn't resolve or genre still missing)
+        if not ident:
+            acoustid_genres = _acoustid_lookup_genres(path)
+            if acoustid_genres and not tags.get("genre"):
+                tags["genre"] = acoustid_genres[0]
+
+        # 3. AudD (absolute last resort, respects quota cooldown)
+        if not ident:
+            ident = audd_identify(path)
+            if ident:
+                log.info(f"  AudD: {ident.get('artist')} – {ident.get('title')}")
+
         if ident:
-            log.info(f"  AudD: {ident.get('artist')} – {ident.get('title')}")
             tags["title"] = tags.get("title") or ident.get("title")
             tags["artist"] = tags.get("artist") or ident.get("artist")
             tags["album"] = tags.get("album") or ident.get("album")
             tags["spotify_id"] = tags.get("spotify_id") or ident.get("spotify_id")
         else:
-            log.warning("  AudD konnte den Song nicht identifizieren")
+            log.warning("  Fingerprint-Erkennung erfolglos")
 
+    orig_genre = tags.get("genre") or ""
     raw_artist = tags.get("artist") or "Sonstiges"
     # Apply artist alias rules before any further processing
     raw_artist = resolver.apply_artist_alias(raw_artist)
@@ -1543,8 +1699,22 @@ def process_file(
     artist = _sanitize(artist_p, "Sonstiges")
     album = _sanitize(tags.get("album") or "Unbekannt", "Unbekannt")
 
-    genre = resolver.resolve(artist_p, tags.get("title") or "")
-    genre = _sanitize(genre, DEFAULT_FOLDER)
+    if pfad and pfad.get('genre'):
+        genre = _sanitize(pfad['genre'], DEFAULT_FOLDER)
+    else:
+        genre = resolver.resolve(artist_p, tags.get("title") or "", embedded_genre=orig_genre)
+        genre = _sanitize(genre, DEFAULT_FOLDER)
+        # If genre still unresolved, try AcoustID fingerprint as last resort
+        if genre == DEFAULT_FOLDER and source == "scanner":
+            fp_genres = _acoustid_lookup_genres(path)
+            if fp_genres:
+                f = _match_genre_rules(fp_genres, resolver._genre_rules)
+                if f:
+                    log.info(f"  AcoustID Genre-Fallback: {fp_genres[0]} → '{f}'")
+                    genre = f
+    # Override with raw API genres if resolver found better info
+    if resolver.last_raw_genres:
+        orig_genre = ', '.join(resolver.last_raw_genres)
 
     log.info(f"  → {genre} / {artist} / {album} / {title}")
 
@@ -1566,6 +1736,24 @@ def process_file(
 
 
 # ── Watcher-Threads ──────────────────────────────────────────────────────────
+
+def _cleanup_empty_scanner_subdirs(base: Path) -> None:
+    """Delete subdirs of base that contain no audio files (including non-audio leftovers)."""
+    for subdir in sorted(base.rglob('*'), reverse=True):
+        if not subdir.is_dir() or subdir == base:
+            continue
+        has_audio = any(
+            f.suffix.lower() in AUDIO_EXT
+            for f in subdir.rglob('*')
+            if f.is_file()
+        )
+        if not has_audio:
+            try:
+                shutil.rmtree(str(subdir))
+                log.info(f"  Subfolder gelöscht (keine Audio): {subdir.relative_to(base)}")
+            except Exception as e:
+                log.warning(f"  Subfolder-Cleanup fehlgeschlagen: {e}")
+
 
 def _scan_dir(directory: Path, db: OrganizerDB, resolver: GenreResolver,
               source: str, delete_after_move: bool) -> int:
@@ -1589,6 +1777,9 @@ def _scan_dir(directory: Path, db: OrganizerDB, resolver: GenreResolver,
                 success += 1
         except Exception as e:
             log.error(f"Fehler bei {f.name}: {e}")
+
+    # Remove empty subdirs (and any non-audio leftovers) after processing
+    _cleanup_empty_scanner_subdirs(directory)
     return success
 
 

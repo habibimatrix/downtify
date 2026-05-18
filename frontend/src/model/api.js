@@ -82,15 +82,15 @@ function downloadFileURL(fileName) {
 }
 
 function coverFileURL(fileName) {
-  return `/cover?file=${encodeURIComponent(fileName)}`
+  return `/api/cover?file=${encodeURIComponent(fileName)}`
 }
 
 function listDownloads() {
-  return API.get('/list')
+  return API.get('/api/files')
 }
 
 function deleteDownload(file) {
-  return API.delete('/delete', { params: { file } })
+  return API.delete('/api/files/delete', { params: { file } })
 }
 
 function writePlaylistM3u(payload) {

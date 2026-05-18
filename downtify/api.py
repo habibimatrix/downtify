@@ -249,6 +249,9 @@ def _song_for_download(url: str) -> dict[str, Any]:
         if not match:
             raise HTTPException(status_code=400, detail='Invalid YouTube URL')
         return providers.song_from_video_id(match.group(1))
+    if 'soundcloud.com/' in url:
+        # yt-dlp handles SoundCloud natively; return a minimal song dict
+        return {'title': url, 'song_id': url, 'name': url, 'source': 'soundcloud', 'url': url}
     raise HTTPException(status_code=400, detail='Unsupported URL')
 
 
