@@ -25,7 +25,6 @@ import threading
 import time
 import unicodedata
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -1224,7 +1223,7 @@ class OrganizerDB:
 
     def add_artist_album(self, artist_norm: str, album: str) -> bool:
         """Append album to artist's known albums. Returns True if newly added."""
-        if not artist_norm or not album or album in ("Unbekannt", "Unknown"):
+        if not artist_norm or not album or album in {"Unbekannt", "Unknown"}:
             return False
         now = int(time.time())
         with self.lock:
@@ -2132,7 +2131,7 @@ class MetadataVoter:
         self._log_step(5, "Status 1", written=list(result_fields.keys()), open=open1)
 
         # Schritt 4.5: Album-Fuzzy mit Artist-Cache
-        if albums_from_cache and status1.get("album") in ("mittel", "niedrig", "offen", None):
+        if albums_from_cache and status1.get("album") in {"mittel", "niedrig", "offen", None}:
             album_vote = ergebnis1.get("album", "")
             if album_vote:
                 best_match = None
@@ -2224,7 +2223,7 @@ class MetadataVoter:
     def _step0_fingerprint(self, path: Path, tags: dict, source: str) -> dict:
         if tags.get("title") and tags.get("artist"):
             return tags
-        if source not in ("scanner", "download"):
+        if source not in {"scanner", "download"}:
             return tags
         log.info("  Tags unvollständig → Fingerprint (Schritt 0)...")
         shazam = _shazam_identify_sync(path)
@@ -2471,6 +2470,42 @@ def determine_target_path(genre: str, artist: str, album: str, title: str, ext: 
     return target
 
 
+# ── Scanner + Monitor DB Helpers ─────────────────────────────────────────────
+
+def _insert_scanner_track(
+    path: Path,
+    spotify_id: str,
+    title: str,
+    genre: str,
+    db: Optional[OrganizerDB] = None,
+) -> None:
+    """Markiert eine Scanner-Datei in der organizer.db als gesehen."""
+    if db is None:
+        return
+    file_id = f"file:{path.name}:{path.stat().st_size}"
+    if not db.is_processed(file_id, spotify_id):
+        db.mark_processed(
+            file_id, spotify_id, "scanner", genre,
+            "", "", title, str(path),
+        )
+
+
+def _update_monitor_metadata(
+    original_path: Path,
+    genre: str,
+    artist: str,
+    album: str,
+    title: str,
+    *,
+    orig_genre: str = "",
+    orig_artist: str = "",
+    orig_album: str = "",
+    orig_title: str = "",
+) -> None:
+    """Aktualisiert Monitor-DB nach erfolgreichem Organisieren einer Download-Datei."""
+    _nullify_monitor_filename(original_path)
+
+
 # ── Downtify Monitor DB: filename nullifizieren ───────────────────────────────
 
 def _nullify_monitor_filename(original_path: Path) -> None:
@@ -2564,7 +2599,7 @@ def process_file(  # noqa: PLR0914
         orig_title = tags.get("title") or path.stem
         if source == "scanner":
             scanner_spotify_id = tags.get("spotify_id") or f"scanner:{path.stem}"
-            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre)
+            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre, db=db)
         raw_artist = resolver.apply_artist_alias(tags.get("artist") or "Sonstiges")
         artist_p = _primary_artist(raw_artist)
         title = _sanitize(tags.get("title") or path.stem)
@@ -2587,7 +2622,7 @@ def process_file(  # noqa: PLR0914
         # Scanner: register in monitor.db before the move
         if source == "scanner":
             scanner_spotify_id = tags.get("spotify_id") or f"scanner:{path.stem}"
-            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre)
+            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre, db=db)
 
         raw_artist = resolver.apply_artist_alias(resolved.get("artist") or "Sonstiges")
         artist_p = _primary_artist(raw_artist)

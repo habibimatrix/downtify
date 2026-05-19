@@ -386,10 +386,18 @@
         </section>
 
         <!-- ── SoundCloud Client ID ─────────────────────────────────────── -->
-        <section class="rounded-2xl border border-base-content/10 overflow-hidden">
-          <div class="px-5 py-4 border-b border-base-content/8 bg-base-content/2">
-            <h2 class="text-sm font-semibold">{{ t('organizer.soundcloudTitle') }}</h2>
-            <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.soundcloudHint') }}</p>
+        <section
+          class="rounded-2xl border border-base-content/10 overflow-hidden"
+        >
+          <div
+            class="px-5 py-4 border-b border-base-content/8 bg-base-content/2"
+          >
+            <h2 class="text-sm font-semibold">
+              {{ t('organizer.soundcloudTitle') }}
+            </h2>
+            <p class="text-xs text-base-content/50 mt-0.5">
+              {{ t('organizer.soundcloudHint') }}
+            </p>
           </div>
           <div class="px-5 py-4 space-y-2">
             <div class="flex gap-2">
@@ -404,21 +412,40 @@
                 :disabled="scDiscovering"
                 @click="discoverSoundcloudId"
               >
-                <span v-if="scDiscovering" class="loading loading-spinner loading-xs mr-1" />
+                <span
+                  v-if="scDiscovering"
+                  class="loading loading-spinner loading-xs mr-1"
+                />
                 <Icon v-else icon="clarity:search-line" class="h-4 w-4 mr-1" />
                 {{ t('organizer.soundcloudDiscover') }}
               </button>
             </div>
-            <p v-if="scMsg" class="text-xs" :class="scError ? 'text-error' : 'text-success'">{{ scMsg }}</p>
-            <p class="text-[11px] text-base-content/30">{{ t('organizer.soundcloudNote') }}</p>
+            <p
+              v-if="scMsg"
+              class="text-xs"
+              :class="scError ? 'text-error' : 'text-success'"
+            >
+              {{ scMsg }}
+            </p>
+            <p class="text-[11px] text-base-content/30">
+              {{ t('organizer.soundcloudNote') }}
+            </p>
           </div>
         </section>
 
         <!-- ── Separator Tokens ─────────────────────────────────────────── -->
-        <section class="rounded-2xl border border-base-content/10 overflow-hidden">
-          <div class="px-5 py-4 border-b border-base-content/8 bg-base-content/2">
-            <h2 class="text-sm font-semibold">{{ t('organizer.separatorTokens') }}</h2>
-            <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.separatorTokensHint') }}</p>
+        <section
+          class="rounded-2xl border border-base-content/10 overflow-hidden"
+        >
+          <div
+            class="px-5 py-4 border-b border-base-content/8 bg-base-content/2"
+          >
+            <h2 class="text-sm font-semibold">
+              {{ t('organizer.separatorTokens') }}
+            </h2>
+            <p class="text-xs text-base-content/50 mt-0.5">
+              {{ t('organizer.separatorTokensHint') }}
+            </p>
           </div>
           <div class="px-5 py-4 space-y-3">
             <!-- Token chips -->
@@ -445,7 +472,10 @@
                 :placeholder="t('organizer.newSeparator')"
                 @keydown.enter.prevent="addSeparator"
               />
-              <button class="btn btn-sm btn-ghost h-9 px-3" @click="addSeparator">
+              <button
+                class="btn btn-sm btn-ghost h-9 px-3"
+                @click="addSeparator"
+              >
                 <Icon icon="clarity:plus-line" class="h-4 w-4" />
                 {{ t('organizer.addSeparator') }}
               </button>
@@ -454,19 +484,31 @@
         </section>
 
         <!-- ── Cache Editor ──────────────────────────────────────────────── -->
-        <section class="rounded-2xl border border-base-content/10 overflow-hidden">
-          <div class="px-5 py-4 border-b border-base-content/8 bg-base-content/2 flex items-center justify-between gap-3">
+        <section
+          class="rounded-2xl border border-base-content/10 overflow-hidden"
+        >
+          <div
+            class="px-5 py-4 border-b border-base-content/8 bg-base-content/2 flex items-center justify-between gap-3"
+          >
             <div>
-              <h2 class="text-sm font-semibold">{{ t('organizer.cacheEditor') }}</h2>
-              <p class="text-xs text-base-content/50 mt-0.5">{{ t('organizer.cacheEditorHint') }}</p>
+              <h2 class="text-sm font-semibold">
+                {{ t('organizer.cacheEditor') }}
+              </h2>
+              <p class="text-xs text-base-content/50 mt-0.5">
+                {{ t('organizer.cacheEditorHint') }}
+              </p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <span class="text-xs text-base-content/40">{{ t('organizer.cacheCount', { n: cacheTotal }) }}</span>
+              <span class="text-xs text-base-content/40">{{
+                t('organizer.cacheCount', { n: cacheTotal })
+              }}</span>
               <button
                 v-if="cacheTotal > 0"
                 class="btn btn-xs btn-ghost text-error/60 hover:text-error h-8 px-3"
                 @click="clearCache"
-              >{{ t('organizer.cacheClearAll') }}</button>
+              >
+                {{ t('organizer.cacheClearAll') }}
+              </button>
             </div>
           </div>
 
@@ -490,7 +532,10 @@
           <div v-if="cacheLoading" class="flex items-center justify-center p-8">
             <span class="loading loading-spinner loading-sm" />
           </div>
-          <ul v-else-if="cacheItems.length" class="divide-y divide-base-content/5">
+          <ul
+            v-else-if="cacheItems.length"
+            class="divide-y divide-base-content/5"
+          >
             <li
               v-for="item in cacheItems"
               :key="item.artist_norm"
@@ -498,9 +543,17 @@
             >
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium">{{ item.artist_norm }}</span>
-                  <span v-if="item.genre" class="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-medium">{{ item.genre }}</span>
-                  <span class="text-[10px] text-base-content/25">{{ new Date(item.learned_at * 1000).toLocaleDateString() }}</span>
+                  <span class="text-sm font-medium">{{
+                    item.artist_norm
+                  }}</span>
+                  <span
+                    v-if="item.genre"
+                    class="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-medium"
+                    >{{ item.genre }}</span
+                  >
+                  <span class="text-[10px] text-base-content/25">{{
+                    new Date(item.learned_at * 1000).toLocaleDateString()
+                  }}</span>
                 </div>
                 <div class="flex gap-1 mt-1.5 flex-wrap">
                   <span
@@ -512,9 +565,15 @@
                     <button
                       class="text-base-content/30 hover:text-error transition-colors ml-0.5"
                       @click.stop="removeAlbum(item, album)"
-                    >×</button>
+                    >
+                      ×
+                    </button>
                   </span>
-                  <span v-if="!item.albums?.length" class="text-[10px] text-base-content/25 italic">{{ t('organizer.cacheAlbums') }}: —</span>
+                  <span
+                    v-if="!item.albums?.length"
+                    class="text-[10px] text-base-content/25 italic"
+                    >{{ t('organizer.cacheAlbums') }}: —</span
+                  >
                 </div>
               </div>
               <button
@@ -525,15 +584,40 @@
               </button>
             </li>
           </ul>
-          <div v-else class="px-5 py-6 text-center text-sm text-base-content/40">
-            {{ cacheTotal === 0 ? t('organizer.cacheCount', { n: 0 }) : t('common.noResults') }}
+          <div
+            v-else
+            class="px-5 py-6 text-center text-sm text-base-content/40"
+          >
+            {{
+              cacheTotal === 0
+                ? t('organizer.cacheCount', { n: 0 })
+                : t('common.noResults')
+            }}
           </div>
 
           <!-- Cache pagination -->
-          <div v-if="cacheTotal > cachePageSize" class="px-5 py-3 flex items-center justify-between border-t border-base-content/8">
-            <button class="btn btn-xs btn-ghost" :disabled="cachePage === 1" @click="cachePage--; loadCache()">←</button>
-            <span class="text-xs text-base-content/40">{{ cachePage }} / {{ Math.ceil(cacheTotal / cachePageSize) }}</span>
-            <button class="btn btn-xs btn-ghost" :disabled="cachePage >= Math.ceil(cacheTotal / cachePageSize)" @click="cachePage++; loadCache()">→</button>
+          <div
+            v-if="cacheTotal > cachePageSize"
+            class="px-5 py-3 flex items-center justify-between border-t border-base-content/8"
+          >
+            <button
+              class="btn btn-xs btn-ghost"
+              :disabled="cachePage === 1"
+              @click="cachePage--; loadCache()"
+            >
+              ←
+            </button>
+            <span class="text-xs text-base-content/40"
+              >{{ cachePage }} /
+              {{ Math.ceil(cacheTotal / cachePageSize) }}</span
+            >
+            <button
+              class="btn btn-xs btn-ghost"
+              :disabled="cachePage >= Math.ceil(cacheTotal / cachePageSize)"
+              @click="cachePage++; loadCache()"
+            >
+              →
+            </button>
           </div>
         </section>
       </template>
@@ -724,7 +808,11 @@ async function loadCache() {
   cacheLoading.value = true
   try {
     const offset = (cachePage.value - 1) * cachePageSize
-    const res = await API.listCacheTracks(cacheSearch.value, cachePageSize, offset)
+    const res = await API.listCacheTracks(
+      cacheSearch.value,
+      cachePageSize,
+      offset
+    )
     cacheItems.value = res.data.items || []
     cacheTotal.value = res.data.total || 0
   } catch (e) {
@@ -740,7 +828,9 @@ async function deleteCacheEntry(item) {
     cacheMsg.value = t('organizer.cacheDeleted')
     loadCache()
   } catch {}
-  setTimeout(() => { cacheMsg.value = '' }, 3000)
+  setTimeout(() => {
+    cacheMsg.value = ''
+  }, 3000)
 }
 
 async function removeAlbum(item, album) {
@@ -749,17 +839,22 @@ async function removeAlbum(item, album) {
     item.albums = item.albums.filter((a) => a !== album)
     cacheMsg.value = t('organizer.cacheDeleted')
   } catch {}
-  setTimeout(() => { cacheMsg.value = '' }, 3000)
+  setTimeout(() => {
+    cacheMsg.value = ''
+  }, 3000)
 }
 
 async function clearCache() {
-  if (!confirm(t('organizer.cacheClearConfirm', { n: cacheTotal.value }))) return
+  if (!confirm(t('organizer.cacheClearConfirm', { n: cacheTotal.value })))
+    return
   try {
     await API.clearAllCache()
     cacheMsg.value = t('organizer.cacheClearedAll')
     loadCache()
   } catch {}
-  setTimeout(() => { cacheMsg.value = '' }, 3000)
+  setTimeout(() => {
+    cacheMsg.value = ''
+  }, 3000)
 }
 
 let cacheSearchTimeout = null

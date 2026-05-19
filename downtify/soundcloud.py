@@ -1,5 +1,6 @@
 """Soundcloud metadata client for downtify organizer."""
 from __future__ import annotations
+
 import logging
 import os
 import re

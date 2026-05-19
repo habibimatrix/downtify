@@ -49,7 +49,6 @@ from .organizer_service import (
     DEFAULT_GENRE_RULES,
     DEFAULT_SEPARATORS,
     get_organizer,
-    stop_organizer,
 )
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -776,7 +775,9 @@ async def save_organizer_config(request: Request) -> dict[str, Any]:
 async def soundcloud_discover_client_id() -> dict[str, Any]:
     """Scrapt soundcloud.com und gibt die eingebettete client_id zurück."""
     import asyncio
-    from .soundcloud import discover_client_id, set_client_id as _sc_set
+
+    from .soundcloud import discover_client_id
+    from .soundcloud import set_client_id as _sc_set
     loop = asyncio.get_event_loop()
     cid = await loop.run_in_executor(None, discover_client_id)
     if not cid:

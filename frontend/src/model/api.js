@@ -147,7 +147,10 @@ function listCacheTracks(search = '', limit = 50, offset = 0) {
 }
 
 function deleteArtistAlbum(artistNorm, album) {
-  return API.delete(`/api/cache/tracks/${encodeURIComponent(artistNorm)}/album`, { data: { album } })
+  return API.delete(
+    `/api/cache/tracks/${encodeURIComponent(artistNorm)}/album`,
+    { data: { album } }
+  )
 }
 
 function deleteCacheTrack(artistNorm) {
