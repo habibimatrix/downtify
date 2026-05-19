@@ -385,54 +385,6 @@
           </div>
         </section>
 
-        <!-- ── SoundCloud Client ID ─────────────────────────────────────── -->
-        <section
-          class="rounded-2xl border border-base-content/10 overflow-hidden"
-        >
-          <div
-            class="px-5 py-4 border-b border-base-content/8 bg-base-content/2"
-          >
-            <h2 class="text-sm font-semibold">
-              {{ t('organizer.soundcloudTitle') }}
-            </h2>
-            <p class="text-xs text-base-content/50 mt-0.5">
-              {{ t('organizer.soundcloudHint') }}
-            </p>
-          </div>
-          <div class="px-5 py-4 space-y-2">
-            <div class="flex gap-2">
-              <input
-                v-model="soundcloudClientId"
-                type="text"
-                class="input input-sm h-9 flex-1 font-mono text-xs"
-                :placeholder="t('organizer.soundcloudPlaceholder')"
-              />
-              <button
-                class="btn btn-sm h-9 px-3 border-white/10 bg-base-100/85 hover:bg-base-100"
-                :disabled="scDiscovering"
-                @click="discoverSoundcloudId"
-              >
-                <span
-                  v-if="scDiscovering"
-                  class="loading loading-spinner loading-xs mr-1"
-                />
-                <Icon v-else icon="clarity:search-line" class="h-4 w-4 mr-1" />
-                {{ t('organizer.soundcloudDiscover') }}
-              </button>
-            </div>
-            <p
-              v-if="scMsg"
-              class="text-xs"
-              :class="scError ? 'text-error' : 'text-success'"
-            >
-              {{ scMsg }}
-            </p>
-            <p class="text-[11px] text-base-content/30">
-              {{ t('organizer.soundcloudNote') }}
-            </p>
-          </div>
-        </section>
-
         <!-- ── Separator Tokens ─────────────────────────────────────────── -->
         <section
           class="rounded-2xl border border-base-content/10 overflow-hidden"
@@ -485,7 +437,7 @@
 
         <!-- ── Cache Editor ──────────────────────────────────────────────── -->
         <section
-          class="rounded-2xl border border-base-content/10 overflow-hidden"
+          class="mt-8 rounded-2xl border border-base-content/10 overflow-hidden"
         >
           <div
             class="px-5 py-4 border-b border-base-content/8 bg-base-content/2 flex items-center justify-between gap-3"

@@ -1123,6 +1123,14 @@ class OrganizerDB:
             for r in rows
         }
 
+    def delete_processed_by_spotify_id(self, spotify_id: str) -> None:
+        with self.lock:
+            self.conn.execute(
+                "DELETE FROM processed WHERE spotify_id = ?",
+                (spotify_id,),
+            )
+            self.conn.commit()
+
     def get_cached_genres(self, artist: str) -> Optional[list]:
         with self.lock:
             row = self.conn.execute(

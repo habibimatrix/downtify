@@ -710,7 +710,13 @@ def delete_truth(track_id: int) -> dict[str, Any]:
     """Remove a track from the List of Truth so it can be re-downloaded."""
     if state.monitor_db is None:
         raise HTTPException(status_code=503, detail='Monitor DB not ready')
+    spotify_id = state.monitor_db.get_spotify_id_for_download(track_id)
     deleted = state.monitor_db.delete_download(track_id)
+    # Also clear from organizer processed table so the file can be re-organized
+    if deleted and spotify_id:
+        svc = get_organizer()
+        if svc is not None:
+            svc.db.delete_processed_by_spotify_id(spotify_id)
     return {'deleted': deleted}
 
 
@@ -809,110 +815,109 @@ def organizer_status() -> dict:
 @router.get('/api/health/apis')
 def health_check_apis() -> dict:
     import shutil
-    import subprocess  # noqa: F401
+    import urllib.request
     results: dict[str, dict] = {}
     log_lines: list[str] = []
     ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+    def _http_ok(url: str, headers: Optional[dict] = None, timeout: int = 8) -> tuple[bool, str]:
+        try:
+            req = urllib.request.Request(url, headers=headers or {})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                ok = r.status < 500
+                return ok, f'HTTP {r.status}'
+        except Exception as exc:
+            return False, str(exc)[:120]
+
     # YouTube Music
     try:
-        from ytmusicapi import YTMusic
-        yt = YTMusic()
-        yt.search('test', filter='songs', limit=1)
-        results['youtube_music'] = {'status': 'ok', 'error': None}
+        from downtify import providers
+        providers.search_songs('test', limit=1)
+        results['youtube_music'] = {'status': 'ok', 'detail': 'ytmusicapi reachable'}
     except Exception as e:
         msg = str(e)[:120]
-        results['youtube_music'] = {'status': 'error', 'error': msg}
+        results['youtube_music'] = {'status': 'error', 'detail': msg}
         log_lines.append(f'[{ts}] youtube_music: {msg}')
 
-    # Spotify (embed)
+    # Spotify (public embed, no key needed)
     try:
         from downtify import spotify
-        spotify.search_songs('test', limit=1)
-        results['spotify'] = {'status': 'ok', 'error': None}
+        spotify.track_from_id('4iV5W9uYEdYUVa79Axb7Rh')  # known public track ID
+        results['spotify'] = {'status': 'ok', 'detail': 'Spotify embed reachable'}
     except Exception as e:
         msg = str(e)[:120]
-        results['spotify'] = {'status': 'error', 'error': msg}
+        results['spotify'] = {'status': 'error', 'detail': msg}
         log_lines.append(f'[{ts}] spotify: {msg}')
 
     # Deezer
-    try:
-        import httpx
-        r = httpx.get('https://api.deezer.com/search?q=test&limit=1', timeout=8)
-        r.raise_for_status()
-        results['deezer'] = {'status': 'ok', 'error': None}
-    except Exception as e:
-        msg = str(e)[:120]
-        results['deezer'] = {'status': 'error', 'error': msg}
-        log_lines.append(f'[{ts}] deezer: {msg}')
+    ok, detail = _http_ok('https://api.deezer.com/search?q=test&limit=1')
+    results['deezer'] = {'status': 'ok' if ok else 'error', 'detail': detail}
+    if not ok:
+        log_lines.append(f'[{ts}] deezer: {detail}')
 
-    # Last.fm (no key needed for basic search)
-    try:
-        import httpx
-        r = httpx.get('https://ws.audioscrobbler.com/2.0/?method=track.search&track=test&api_key=nokey&format=json&limit=1', timeout=8)
-        results['lastfm'] = {'status': 'ok' if r.status_code < 500 else 'error', 'error': None if r.status_code < 500 else f'HTTP {r.status_code}'}
-    except Exception as e:
-        msg = str(e)[:120]
-        results['lastfm'] = {'status': 'error', 'error': msg}
-        log_lines.append(f'[{ts}] lastfm: {msg}')
+    # Last.fm
+    ok, detail = _http_ok('https://ws.audioscrobbler.com/2.0/?method=track.search&track=test&api_key=nokey&format=json&limit=1')
+    results['lastfm'] = {'status': 'ok' if ok else 'error', 'detail': detail}
+    if not ok:
+        log_lines.append(f'[{ts}] lastfm: {detail}')
 
     # MusicBrainz
-    try:
-        import httpx
-        r = httpx.get('https://musicbrainz.org/ws/2/recording?query=test&limit=1&fmt=json', headers={'User-Agent': 'Downtiplx/2.7.0'}, timeout=10)
-        r.raise_for_status()
-        results['musicbrainz'] = {'status': 'ok', 'error': None}
-    except Exception as e:
-        msg = str(e)[:120]
-        results['musicbrainz'] = {'status': 'error', 'error': msg}
-        log_lines.append(f'[{ts}] musicbrainz: {msg}')
+    ok, detail = _http_ok(
+        'https://musicbrainz.org/ws/2/recording?query=test&limit=1&fmt=json',
+        headers={'User-Agent': 'Downtiplx/2.7.0'},
+        timeout=10,
+    )
+    results['musicbrainz'] = {'status': 'ok' if ok else 'error', 'detail': detail}
+    if not ok:
+        log_lines.append(f'[{ts}] musicbrainz: {detail}')
 
     # SoundCloud
     try:
         from downtify.soundcloud import get_client_id
         cid = get_client_id()
         if not cid:
-            results['soundcloud'] = {'status': 'warning', 'error': 'No client_id configured — use Auto-detect in Organizer settings'}
+            results['soundcloud'] = {'status': 'warning', 'detail': 'No client_id configured — use Auto-detect in Settings'}
         else:
-            import httpx
-            r = httpx.get('https://api.soundcloud.com/tracks', params={'q': 'test', 'client_id': cid, 'limit': 1}, timeout=8)
-            if r.status_code == 401:
-                results['soundcloud'] = {'status': 'error', 'error': 'client_id invalid (401) — re-run Auto-detect'}
-                log_lines.append(f'[{ts}] soundcloud: client_id 401 invalid')
+            ok, detail = _http_ok(
+                f'https://api.soundcloud.com/tracks?q=test&client_id={cid}&limit=1',
+                timeout=8,
+            )
+            if not ok and '401' in detail:
+                results['soundcloud'] = {'status': 'error', 'detail': 'client_id invalid (401) — re-run Auto-detect'}
+                log_lines.append(f'[{ts}] soundcloud: client_id 401')
             else:
-                results['soundcloud'] = {'status': 'ok', 'error': None}
+                results['soundcloud'] = {'status': 'ok' if ok else 'warning', 'detail': detail}
     except Exception as e:
         msg = str(e)[:120]
-        results['soundcloud'] = {'status': 'error', 'error': msg}
+        results['soundcloud'] = {'status': 'error', 'detail': msg}
         log_lines.append(f'[{ts}] soundcloud: {msg}')
 
     # Shazam
     try:
         import shazamio  # noqa: F401
-        results['shazam'] = {'status': 'ok', 'error': None}
+        results['shazam'] = {'status': 'ok', 'detail': 'shazamio installed'}
     except ImportError as e:
         msg = str(e)[:120]
-        results['shazam'] = {'status': 'error', 'error': f'Import failed: {msg}'}
+        results['shazam'] = {'status': 'error', 'detail': f'Import failed: {msg}'}
         log_lines.append(f'[{ts}] shazam: {msg}')
 
-    # AcoustID (fpcalc)
+    # AcoustID (fpcalc fingerprinter)
     try:
         fpcalc = shutil.which('fpcalc')
         if fpcalc:
-            results['acoustid'] = {'status': 'ok', 'error': None}
+            results['acoustid'] = {'status': 'ok', 'detail': f'fpcalc found at {fpcalc}'}
         else:
-            results['acoustid'] = {'status': 'warning', 'error': 'fpcalc not found in PATH — audio fingerprinting disabled'}
+            results['acoustid'] = {'status': 'warning', 'detail': 'fpcalc not in PATH — fingerprinting disabled'}
     except Exception as e:
-        msg = str(e)[:120]
-        results['acoustid'] = {'status': 'error', 'error': msg}
+        results['acoustid'] = {'status': 'error', 'detail': str(e)[:120]}
 
     # yt-dlp
     try:
         import yt_dlp  # noqa: F401
-        results['yt_dlp'] = {'status': 'ok', 'error': None}
+        results['yt_dlp'] = {'status': 'ok', 'detail': f'v{yt_dlp.version.__version__}'}
     except ImportError as e:
         msg = str(e)[:120]
-        results['yt_dlp'] = {'status': 'error', 'error': msg}
+        results['yt_dlp'] = {'status': 'error', 'detail': msg}
         log_lines.append(f'[{ts}] yt_dlp: {msg}')
 
     # Write error log

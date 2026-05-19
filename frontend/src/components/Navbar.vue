@@ -22,14 +22,22 @@
       </div>
 
       <div class="ml-auto flex items-center gap-1 sm:gap-2">
-        <button
-          class="icon-btn"
-          :class="{ 'icon-btn-active': route.name === 'List' }"
-          @click="router.push({ name: 'List' })"
-          :title="t('nav.library')"
-        >
-          <Icon icon="clarity:library-line" class="h-5 w-5" />
-        </button>
+        <div class="relative">
+          <button
+            class="icon-btn"
+            :class="{ 'icon-btn-active': route.name === 'List' }"
+            @click="router.push({ name: 'List' })"
+            :title="t('nav.library')"
+          >
+            <Icon icon="clarity:library-line" class="h-5 w-5" />
+          </button>
+          <span
+            v-if="processingCount > 0"
+            class="pointer-events-none absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-content text-[9px] font-bold flex items-center justify-center shadow-glow-sm"
+          >
+            {{ processingCount > 9 ? '9+' : processingCount }}
+          </span>
+        </div>
 
         <button
           class="icon-btn"
@@ -104,6 +112,7 @@ import router from '../router'
 import { useBinaryThemeManager } from '../model/theme'
 import { useI18n } from '../i18n'
 import API from '../model/api'
+import { processingCount } from '../model/downloadStore'
 
 import SearchInput from './SearchInput.vue'
 

@@ -319,6 +319,7 @@ import Settings from '/src/components/Settings.vue'
 import AuditModal from '/src/components/AuditModal.vue'
 import API from '/src/model/api'
 import { useI18n } from '/src/i18n'
+import { activeDownloadCount, activeOrganizerCount } from '/src/model/downloadStore'
 
 const PAGE_SIZE = 20
 const { t } = useI18n()
@@ -336,9 +337,11 @@ const deleting = ref({})
 
 // ── Section 1: Active Downloads ──────────────────────────────────────────────
 const activeDownloads = ref([])
+watch(activeDownloads, (v) => { activeDownloadCount.value = v.length }, { immediate: true })
 
 // ── Section 2: Organizer pipeline ────────────────────────────────────────────
 const organizingJobs = ref([])
+watch(organizingJobs, (v) => { activeOrganizerCount.value = v.length }, { immediate: true })
 
 // ── Audit modal ───────────────────────────────────────────────────────────────
 const auditModal = ref(false)

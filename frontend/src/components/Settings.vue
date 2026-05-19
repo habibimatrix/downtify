@@ -245,6 +245,45 @@
           </p>
         </div>
 
+        <!-- SoundCloud Client ID -->
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2"
+          >
+            {{ t('organizer.soundcloudTitle') }}
+          </label>
+          <p class="text-[11px] text-base-content/40 mb-2">
+            {{ t('organizer.soundcloudHint') }}
+          </p>
+          <div class="flex gap-2">
+            <input
+              v-model="soundcloudClientId"
+              type="text"
+              class="input input-sm h-9 flex-1 font-mono text-xs rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60"
+              :placeholder="t('organizer.soundcloudPlaceholder')"
+            />
+            <button
+              class="btn btn-sm h-9 px-3 border-white/10 bg-base-100/85 hover:bg-base-100 rounded-xl"
+              :disabled="scDiscovering"
+              @click="discoverSoundcloudId"
+            >
+              <span v-if="scDiscovering" class="loading loading-spinner loading-xs mr-1" />
+              <Icon v-else icon="clarity:search-line" class="h-4 w-4 mr-1" />
+              {{ t('organizer.soundcloudDiscover') }}
+            </button>
+          </div>
+          <p
+            v-if="scMsg"
+            class="text-xs mt-1.5"
+            :class="scError ? 'text-error' : 'text-success'"
+          >
+            {{ scMsg }}
+          </p>
+          <p class="text-[11px] text-base-content/30 mt-1">
+            {{ t('organizer.soundcloudNote') }}
+          </p>
+        </div>
+
         <!-- API Status -->
         <div>
           <div class="flex items-center justify-between mb-2">
@@ -365,7 +404,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useSettingsManager } from '../model/settings'
 import { useI18n } from '../i18n'
@@ -417,4 +456,45 @@ async function testApis() {
     apiTesting.value = false
   }
 }
+
+const soundcloudClientId = ref('')
+const scDiscovering = ref(false)
+const scMsg = ref('')
+const scError = ref(false)
+
+async function loadSoundcloudId() {
+  try {
+    const res = await API.getOrganizerConfig()
+    soundcloudClientId.value = res.data.soundcloud_client_id || ''
+  } catch {}
+}
+
+async function discoverSoundcloudId() {
+  scDiscovering.value = true
+  scMsg.value = ''
+  scError.value = false
+  try {
+    const res = await API.discoverSoundcloudClientId()
+    soundcloudClientId.value = res.data.client_id
+    await API.saveOrganizerConfig({ soundcloud_client_id: soundcloudClientId.value })
+    scMsg.value = t('organizer.soundcloudFound')
+  } catch {
+    scError.value = true
+    scMsg.value = t('organizer.soundcloudNotFound')
+  } finally {
+    scDiscovering.value = false
+  }
+}
+
+watch(soundcloudClientId, async (val) => {
+  if (val !== undefined) {
+    try {
+      await API.saveOrganizerConfig({ soundcloud_client_id: val })
+    } catch {}
+  }
+})
+
+onMounted(() => {
+  loadSoundcloudId()
+})
 </script>
