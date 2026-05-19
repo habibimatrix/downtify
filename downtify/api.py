@@ -20,8 +20,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import hmac
 import json
+import os
 import re
+import secrets
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,6 +35,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -46,6 +51,32 @@ from .organizer_service import (
     get_organizer,
     stop_organizer,
 )
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+_AUTH_PASSWORD = os.getenv('DOWNTIFY_PASSWORD', '')
+_SESSION_SECRET = secrets.token_hex(32)
+_SESSION_COOKIE = 'downtiplx_session'
+_SESSION_MAX_AGE = 30 * 24 * 3600  # 30 days
+
+
+def _make_token() -> str:
+    return hmac.new(_SESSION_SECRET.encode(), _AUTH_PASSWORD.encode(), hashlib.sha256).hexdigest()
+
+
+def _token_valid(token: str) -> bool:
+    if not _AUTH_PASSWORD:
+        return True
+    return hmac.compare_digest(token, _make_token())
+
+
+def _is_authenticated(request: Request) -> bool:
+    if not _AUTH_PASSWORD:
+        return True
+    return _token_valid(request.cookies.get(_SESSION_COOKIE, ''))
+
+
+# ── Settings ───────────────────────────────────────────────────────────────────
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     'audio_providers': ['youtube-music'],
@@ -816,6 +847,44 @@ def delete_cache_track(artist_norm: str) -> dict[str, Any]:
     svc.db.delete_artist_knowledge(artist_norm)
     return {'deleted': True}
 
+
+# ── Auth API ──────────────────────────────────────────────────────────────────
+
+@router.get('/api/auth')
+def auth_status(request: Request) -> dict[str, Any]:
+    return {
+        'protected': bool(_AUTH_PASSWORD),
+        'authenticated': _is_authenticated(request),
+    }
+
+
+@router.post('/api/auth')
+async def auth_login(request: Request, response: Response) -> dict[str, Any]:
+    if not _AUTH_PASSWORD:
+        return {'ok': True}
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid JSON')
+    if body.get('password', '') != _AUTH_PASSWORD:
+        raise HTTPException(status_code=401, detail='Wrong password')
+    response.set_cookie(
+        _SESSION_COOKIE,
+        _make_token(),
+        httponly=True,
+        samesite='strict',
+        max_age=_SESSION_MAX_AGE,
+    )
+    return {'ok': True}
+
+
+@router.post('/api/auth/logout')
+def auth_logout(response: Response) -> dict[str, Any]:
+    response.delete_cookie(_SESSION_COOKIE)
+    return {'ok': True}
+
+
+# ── Audit API ─────────────────────────────────────────────────────────────────
 
 @router.get('/api/audit/{track_id}')
 def get_audit(track_id: str) -> dict[str, Any]:
