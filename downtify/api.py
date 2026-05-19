@@ -1036,6 +1036,15 @@ def get_audit(track_id: str) -> dict[str, Any]:
     if svc is None:
         raise HTTPException(status_code=503, detail='Organizer not running')
     audit = svc.db.get_audit(track_id)
+    if audit is None and state.monitor_db is not None:
+        # For YouTube-sourced downloads the organizer saves the audit under
+        # "scanner:<stem>" because the file has no embedded Spotify ID tag.
+        # Fall back: look up the filename from monitor.db by track_spotify_id.
+        from pathlib import Path as _Path
+        filename = state.monitor_db.get_filename_for_spotify_id(track_id)
+        if filename:
+            stem = _Path(filename).stem
+            audit = svc.db.get_audit(f'scanner:{stem}')
     if audit is None:
         raise HTTPException(status_code=404, detail='No audit found')
     return audit

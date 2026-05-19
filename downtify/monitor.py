@@ -342,6 +342,15 @@ class PlaylistMonitorDB:
             ).fetchone()
         return row['track_spotify_id'] if row else None
 
+    def get_filename_for_spotify_id(self, track_spotify_id: str) -> Optional[str]:
+        """Return filename for a track_spotify_id, or None if not found."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT filename FROM downloaded_tracks WHERE track_spotify_id=? LIMIT 1",
+                (track_spotify_id,),
+            ).fetchone()
+        return row['filename'] if row else None
+
     def delete_download(self, track_id: int) -> bool:
         """Remove a track from the List of Truth so it can be re-downloaded."""
         with self._connect() as conn:

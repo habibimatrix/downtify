@@ -49,7 +49,10 @@ class _InterceptHandler(logging.Handler):
             level: str | int = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
-        frame, depth = sys._getframe(6), 6
+        try:
+            frame, depth = sys._getframe(6), 6
+        except ValueError:
+            frame, depth = sys._getframe(0), 0
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back  # type: ignore[assignment]
             depth += 1
