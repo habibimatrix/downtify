@@ -603,7 +603,7 @@
             <button
               class="btn btn-xs btn-ghost"
               :disabled="cachePage === 1"
-              @click="cachePage--; loadCache()"
+              @click="cachePrev"
             >
               ←
             </button>
@@ -614,7 +614,7 @@
             <button
               class="btn btn-xs btn-ghost"
               :disabled="cachePage >= Math.ceil(cacheTotal / cachePageSize)"
-              @click="cachePage++; loadCache()"
+              @click="cacheNext"
             >
               →
             </button>
@@ -842,6 +842,16 @@ async function removeAlbum(item, album) {
   setTimeout(() => {
     cacheMsg.value = ''
   }, 3000)
+}
+
+function cachePrev() {
+  cachePage.value--
+  loadCache()
+}
+
+function cacheNext() {
+  cachePage.value++
+  loadCache()
 }
 
 async function clearCache() {
