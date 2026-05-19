@@ -1,6 +1,6 @@
 
 <h1>
-  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=32&pause=99999&color=E5A00D&center=true&vCenter=true&width=300&height=48&lines=Downtiplx" alt="Downtiplx" />
+  <img width="185" height="50" alt="image" src="https://github.com/user-attachments/assets/4b11faec-f1e9-46bd-8902-bd6d0bd00ff0" />
 </h1>
 
 [![Fork of](https://img.shields.io/badge/fork%20of-henriquesebastiao%2Fdowntify-E5A00D?style=flat-square&logo=github&logoColor=1a0e00)](https://github.com/henriquesebastiao/downtify)
