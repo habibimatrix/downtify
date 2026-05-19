@@ -10,10 +10,10 @@
       >
         <img
           src="../assets/downtify.svg"
-          class="h-8 w-8 drop-shadow-[0_0_8px_rgba(26,208,92,0.55)]"
+          class="h-8 w-8 drop-shadow-[0_0_8px_rgba(229,160,13,0.55)]"
         />
         <span class="hidden sm:inline text-lg font-bold tracking-tight">
-          Downtify
+          Downtiplx
         </span>
       </button>
 
@@ -33,15 +33,6 @@
 
         <button
           class="icon-btn"
-          :class="{ 'icon-btn-active': route.name === 'Player' }"
-          @click="router.push({ name: 'Player' })"
-          :title="t('nav.player')"
-        >
-          <Icon icon="clarity:headphones-line" class="h-5 w-5" />
-        </button>
-
-        <button
-          class="icon-btn"
           :class="{ 'icon-btn-active': route.name === 'Monitor' }"
           @click="router.push({ name: 'Monitor' })"
           :title="t('nav.monitor')"
@@ -56,28 +47,6 @@
           :title="t('nav.organizer')"
         >
           <Icon icon="clarity:organization-line" class="h-5 w-5" />
-        </button>
-
-        <button
-          class="icon-btn relative"
-          :class="{ 'icon-btn-active': route.name === 'Download' }"
-          @click="
-            route.name === 'Download'
-              ? router.push({
-                  name: 'Search',
-                  params: { query: sm.searchTerm.value || ' ' },
-                })
-              : router.push({ name: 'Download' })
-          "
-          :title="t('nav.queue')"
-        >
-          <Icon icon="clarity:download-line" class="h-5 w-5" />
-          <span
-            v-if="pt.downloadQueue.value.length > 0"
-            class="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-content shadow-glow-sm"
-          >
-            {{ pt.downloadQueue.value.length }}
-          </span>
         </button>
 
         <button
@@ -123,8 +92,6 @@ import { useRoute } from 'vue-router'
 
 import router from '../router'
 import { useBinaryThemeManager } from '../model/theme'
-import { useProgressTracker } from '../model/download'
-import { useSearchManager } from '../model/search'
 import { useI18n } from '../i18n'
 
 import SearchInput from './SearchInput.vue'
@@ -134,7 +101,5 @@ const themeMgr = useBinaryThemeManager({
   newLightAlias: 'downtiplx-light',
   newDarkAlias: 'downtiplx-dark',
 })
-const pt = useProgressTracker()
-const sm = useSearchManager()
 const { t } = useI18n()
 </script>

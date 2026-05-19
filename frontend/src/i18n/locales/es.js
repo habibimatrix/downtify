@@ -192,7 +192,7 @@ export default {
     checkNow: 'Revisar ahora',
     stop: 'Dejar de vigilar',
     deletePrompt: '¿Dejar de vigilar "{name}"?',
-    info: 'Al añadir una lista, Downtify descarga todas las pistas que contenga en ese momento y la sigue vigilando. Cualquier canción añadida después en Spotify se detecta y descarga automáticamente en la siguiente revisión.',
+    info: 'Al añadir una lista, Downtiplx descarga todas las pistas que contenga en ese momento y la sigue vigilando. Cualquier canción añadida después en Spotify se detecta y descarga automáticamente en la siguiente revisión.',
     every15: 'Cada 15 min',
     every30: 'Cada 30 min',
     every1h: 'Cada hora',
@@ -228,7 +228,7 @@ export default {
   },
   settings: {
     title: 'Ajustes',
-    subtitle: 'Ajusta cómo Downtify descarga y etiqueta tu música.',
+    subtitle: 'Ajusta cómo Downtiplx descarga y etiqueta tu música.',
     audioSource: 'Fuente de audio',
     lyricsSource: 'Fuente de letras',
     lyricsHint: 'solo lrclib está activo',
