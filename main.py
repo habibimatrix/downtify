@@ -81,7 +81,7 @@ def _setup_logging(level: str) -> None:
         _log.propagate = False
 
 
-DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_DIR', '/data/cache'))
+DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_DIR', '/data/tempdownload'))
 DATABASE_DIR = Path('/data')
 WEB_GUI_LOCATION = os.getenv('WEB_GUI_LOCATION', '/downtify/frontend/dist')
 DEFAULT_HOST = os.getenv('HOST', '0.0.0.0')

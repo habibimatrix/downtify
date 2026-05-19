@@ -61,7 +61,7 @@ except ImportError:
 
 # ── Konfiguration ─────────────────────────────────────────────────────────────
 
-DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "/downloads"))
+DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "/data/tempdownload"))
 MUSIK_DIR = Path(os.getenv("MUSIK_DIR", "/musik"))
 SCANNER_DIR = Path(os.getenv("SCANNER_DIR", "/scanner"))
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
