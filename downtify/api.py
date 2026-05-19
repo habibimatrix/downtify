@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime as _dt
 import hashlib
 import hmac
 import json
@@ -692,6 +693,15 @@ def get_truth(
     items, total, pages = state.monitor_db.list_all_downloads(
         search=search, page=page, limit=limit
     )
+    # Enrich with organizer metadata (genre, artist, album, title, orig_*)
+    svc = get_organizer()
+    if svc is not None:
+        ids = [item['track_spotify_id'] for item in items if item.get('track_spotify_id')]
+        enriched = svc.db.get_processed_by_spotify_ids(ids)
+        for item in items:
+            meta = enriched.get(item.get('track_spotify_id') or '', {})
+            for key in ('genre', 'artist', 'album', 'title', 'orig_genre', 'orig_artist', 'orig_album', 'orig_title'):
+                item[key] = meta.get(key, '')
     return {'items': items, 'total': total, 'page': page, 'pages': pages}
 
 
@@ -788,6 +798,134 @@ async def soundcloud_discover_client_id() -> dict[str, Any]:
     if state.settings_path is not None:
         _save_settings_full(state.settings_path, state.settings)
     return {'client_id': cid}
+
+
+@router.get('/api/organizer/status')
+def organizer_status() -> dict:
+    """Returns currently active organizer jobs."""
+    return {"jobs": list(getattr(state, 'organizer_jobs', {}).values())}
+
+
+@router.get('/api/health/apis')
+def health_check_apis() -> dict:
+    import shutil
+    import subprocess  # noqa: F401
+    results: dict[str, dict] = {}
+    log_lines: list[str] = []
+    ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # YouTube Music
+    try:
+        from ytmusicapi import YTMusic
+        yt = YTMusic()
+        yt.search('test', filter='songs', limit=1)
+        results['youtube_music'] = {'status': 'ok', 'error': None}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['youtube_music'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] youtube_music: {msg}')
+
+    # Spotify (embed)
+    try:
+        from downtify import spotify
+        spotify.search_songs('test', limit=1)
+        results['spotify'] = {'status': 'ok', 'error': None}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['spotify'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] spotify: {msg}')
+
+    # Deezer
+    try:
+        import httpx
+        r = httpx.get('https://api.deezer.com/search?q=test&limit=1', timeout=8)
+        r.raise_for_status()
+        results['deezer'] = {'status': 'ok', 'error': None}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['deezer'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] deezer: {msg}')
+
+    # Last.fm (no key needed for basic search)
+    try:
+        import httpx
+        r = httpx.get('https://ws.audioscrobbler.com/2.0/?method=track.search&track=test&api_key=nokey&format=json&limit=1', timeout=8)
+        results['lastfm'] = {'status': 'ok' if r.status_code < 500 else 'error', 'error': None if r.status_code < 500 else f'HTTP {r.status_code}'}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['lastfm'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] lastfm: {msg}')
+
+    # MusicBrainz
+    try:
+        import httpx
+        r = httpx.get('https://musicbrainz.org/ws/2/recording?query=test&limit=1&fmt=json', headers={'User-Agent': 'Downtiplx/2.7.0'}, timeout=10)
+        r.raise_for_status()
+        results['musicbrainz'] = {'status': 'ok', 'error': None}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['musicbrainz'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] musicbrainz: {msg}')
+
+    # SoundCloud
+    try:
+        from downtify.soundcloud import get_client_id
+        cid = get_client_id()
+        if not cid:
+            results['soundcloud'] = {'status': 'warning', 'error': 'No client_id configured — use Auto-detect in Organizer settings'}
+        else:
+            import httpx
+            r = httpx.get('https://api.soundcloud.com/tracks', params={'q': 'test', 'client_id': cid, 'limit': 1}, timeout=8)
+            if r.status_code == 401:
+                results['soundcloud'] = {'status': 'error', 'error': 'client_id invalid (401) — re-run Auto-detect'}
+                log_lines.append(f'[{ts}] soundcloud: client_id 401 invalid')
+            else:
+                results['soundcloud'] = {'status': 'ok', 'error': None}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['soundcloud'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] soundcloud: {msg}')
+
+    # Shazam
+    try:
+        import shazamio  # noqa: F401
+        results['shazam'] = {'status': 'ok', 'error': None}
+    except ImportError as e:
+        msg = str(e)[:120]
+        results['shazam'] = {'status': 'error', 'error': f'Import failed: {msg}'}
+        log_lines.append(f'[{ts}] shazam: {msg}')
+
+    # AcoustID (fpcalc)
+    try:
+        fpcalc = shutil.which('fpcalc')
+        if fpcalc:
+            results['acoustid'] = {'status': 'ok', 'error': None}
+        else:
+            results['acoustid'] = {'status': 'warning', 'error': 'fpcalc not found in PATH — audio fingerprinting disabled'}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['acoustid'] = {'status': 'error', 'error': msg}
+
+    # yt-dlp
+    try:
+        import yt_dlp  # noqa: F401
+        results['yt_dlp'] = {'status': 'ok', 'error': None}
+    except ImportError as e:
+        msg = str(e)[:120]
+        results['yt_dlp'] = {'status': 'error', 'error': msg}
+        log_lines.append(f'[{ts}] yt_dlp: {msg}')
+
+    # Write error log
+    if log_lines:
+        try:
+            log_path = Path('/data/API Fehler.log')
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write('\n'.join(log_lines) + '\n')
+        except Exception:
+            pass
+
+    return {'apis': results, 'checked_at': ts}
 
 
 # ── Cache API ─────────────────────────────────────────────────────────────────

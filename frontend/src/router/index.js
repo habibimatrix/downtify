@@ -1,10 +1,8 @@
 import { createWebHistory, createRouter } from 'vue-router'
 import Home from '/src/views/Front.vue'
 import Search from '/src/views/Search.vue'
-import Download from '/src/views/Download.vue'
 import List from '/src/views/Downloads.vue'
 import Monitor from '/src/views/Monitor.vue'
-import Player from '/src/views/Player.vue'
 import Organizer from '/src/views/Organizer.vue'
 import Login from '/src/views/Login.vue'
 import API from '/src/model/api'
@@ -28,11 +26,6 @@ const routes = [
     component: Search,
   },
   {
-    path: '/download',
-    name: 'Download',
-    component: Download,
-  },
-  {
     path: '/list',
     name: 'List',
     component: List,
@@ -41,11 +34,6 @@ const routes = [
     path: '/monitor',
     name: 'Monitor',
     component: Monitor,
-  },
-  {
-    path: '/player',
-    name: 'Player',
-    component: Player,
   },
   {
     path: '/organizer',

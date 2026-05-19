@@ -247,6 +247,24 @@ def build_app() -> FastAPI:
         # Organizer-Service starten (Auto-Organisation + Scanner-Ordner)
         start_organizer()
 
+        # Set organizer broadcast callback (thread-safe)
+        import asyncio as _asyncio
+
+        from downtify.organizer_service import (
+            set_broadcast_callback as _set_bc,
+        )
+        _loop = loop
+
+        def _org_broadcast(msg: dict) -> None:
+            try:
+                _asyncio.run_coroutine_threadsafe(
+                    api.state.connections.broadcast(msg), _loop
+                )
+            except Exception:
+                pass
+        _set_bc(_org_broadcast)
+        api.state.organizer_jobs: dict = {}
+
     @app.get('/api/files')
     def list_downloads() -> list[str]:
         audio_exts = {'.mp3', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}

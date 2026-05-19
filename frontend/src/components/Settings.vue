@@ -245,6 +245,72 @@
           </p>
         </div>
 
+        <!-- API Status -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label
+              class="block text-xs font-semibold uppercase tracking-wider text-base-content/50"
+            >
+              {{ t('apiHealth.title') }}
+            </label>
+            <button
+              class="btn btn-xs rounded-full border-white/10 bg-base-100/85 hover:bg-base-100"
+              :disabled="apiTesting"
+              @click="testApis"
+            >
+              <span v-if="apiTesting" class="loading loading-spinner loading-xs mr-1" />
+              {{ apiTesting ? t('apiHealth.testing') : t('apiHealth.test') }}
+            </button>
+          </div>
+          <p class="text-[11px] text-base-content/40 mb-2">
+            {{ t('apiHealth.subtitle') }}
+          </p>
+          <div v-if="apiResults" class="space-y-1">
+            <div
+              v-for="[key, res] in apiRows"
+              :key="key"
+              class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs border border-white/5 bg-base-100/50"
+            >
+              <span
+                class="h-2 w-2 rounded-full shrink-0"
+                :class="{
+                  'bg-success': res.status === 'ok',
+                  'bg-warning': res.status === 'warning',
+                  'bg-error': res.status === 'error',
+                }"
+              />
+              <span class="font-medium min-w-[6rem]">{{ apiLabel(key) }}</span>
+              <span
+                class="flex-1 truncate"
+                :class="{
+                  'text-success/70': res.status === 'ok',
+                  'text-warning/70': res.status === 'warning',
+                  'text-error/70': res.status === 'error',
+                }"
+              >{{ res.detail }}</span>
+              <span
+                class="text-[10px] font-semibold uppercase shrink-0"
+                :class="{
+                  'text-success': res.status === 'ok',
+                  'text-warning': res.status === 'warning',
+                  'text-error': res.status === 'error',
+                }"
+              >
+                {{
+                  res.status === 'ok'
+                    ? t('apiHealth.ok')
+                    : res.status === 'warning'
+                      ? t('apiHealth.warning')
+                      : t('apiHealth.error')
+                }}
+              </span>
+            </div>
+          </div>
+          <p v-else class="text-xs text-base-content/30 text-center py-2">
+            {{ t('apiHealth.notTested') }}
+          </p>
+        </div>
+
         <!-- Save status -->
         <transition
           enter-active-class="transition duration-200"
@@ -299,9 +365,11 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useSettingsManager } from '../model/settings'
 import { useI18n } from '../i18n'
+import API from '../model/api'
 
 const sm = useSettingsManager()
 const { t, locale, setLocale, locales } = useI18n()
@@ -310,5 +378,43 @@ function providerLabel(provider) {
   if (provider === 'youtube-music') return 'YouTube Music'
   if (provider === 'youtube') return 'YouTube'
   return provider
+}
+
+const API_LABEL_MAP = {
+  yt_dlp: 'apiHealth.ytDlp',
+  spotify: 'apiHealth.spotify',
+  deezer: 'apiHealth.deezer',
+  lastfm: 'apiHealth.lastfm',
+  discogs: 'apiHealth.discogs',
+  musicbrainz: 'apiHealth.musicbrainz',
+  soundcloud: 'apiHealth.soundcloud',
+  shazam: 'apiHealth.shazam',
+  acoustid: 'apiHealth.acoustid',
+}
+
+const API_ORDER = ['yt_dlp', 'spotify', 'deezer', 'lastfm', 'discogs', 'musicbrainz', 'soundcloud', 'shazam', 'acoustid']
+
+function apiLabel(key) {
+  return API_LABEL_MAP[key] ? t(API_LABEL_MAP[key]) : key
+}
+
+const apiResults = ref(null)
+const apiTesting = ref(false)
+
+const apiRows = computed(() => {
+  if (!apiResults.value) return []
+  return API_ORDER.filter((k) => apiResults.value[k]).map((k) => [k, apiResults.value[k]])
+})
+
+async function testApis() {
+  apiTesting.value = true
+  try {
+    const res = await API.healthApis()
+    apiResults.value = res.data.results || res.data
+  } catch {
+    apiResults.value = null
+  } finally {
+    apiTesting.value = false
+  }
 }
 </script>

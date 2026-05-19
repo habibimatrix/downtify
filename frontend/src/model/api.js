@@ -173,6 +173,14 @@ function authLogin(password) {
   return API.post('/api/auth', { password })
 }
 
+function authLogout() {
+  return API.post('/api/auth/logout')
+}
+
+function healthApis() {
+  return API.get('/api/health/apis')
+}
+
 function ws_onmessage(fn) {
   return (wsConnection.onmessage = fn)
 }
@@ -208,6 +216,8 @@ export default {
   discoverSoundcloudClientId,
   authStatus,
   authLogin,
+  authLogout,
+  healthApis,
   check_for_update,
   ws_onmessage,
   ws_onerror,

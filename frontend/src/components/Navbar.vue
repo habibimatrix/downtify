@@ -70,6 +70,15 @@
           <Icon v-else icon="clarity:moon-line" class="h-5 w-5" />
         </button>
 
+        <button
+          v-if="isProtected"
+          class="icon-btn"
+          @click="logout()"
+          :title="t('nav.logout')"
+        >
+          <Icon icon="clarity:logout-line" class="h-5 w-5" />
+        </button>
+
         <label
           for="settings-modal"
           class="icon-btn cursor-pointer"
@@ -89,10 +98,12 @@
 <script setup>
 import { Icon } from '@iconify/vue'
 import { useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
 
 import router from '../router'
 import { useBinaryThemeManager } from '../model/theme'
 import { useI18n } from '../i18n'
+import API from '../model/api'
 
 import SearchInput from './SearchInput.vue'
 
@@ -102,4 +113,19 @@ const themeMgr = useBinaryThemeManager({
   newDarkAlias: 'downtiplx-dark',
 })
 const { t } = useI18n()
+
+const isProtected = ref(false)
+onMounted(async () => {
+  try {
+    const res = await API.authStatus()
+    isProtected.value = res.data.protected === true
+  } catch {}
+})
+
+async function logout() {
+  try {
+    await API.authLogout()
+  } catch {}
+  window.location.href = '/login'
+}
 </script>

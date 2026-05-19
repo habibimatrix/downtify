@@ -26,7 +26,7 @@ import time
 import unicodedata
 from collections import Counter
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 from mutagen import File as MutagenFile
@@ -96,6 +96,15 @@ DEFAULT_SEPARATORS: list[str] = [
 ]
 
 log = logging.getLogger("downtify.organizer")
+
+# Thread-safe broadcast callback set by api.py at startup
+_BROADCAST_CB: Optional[Callable] = None
+
+
+def set_broadcast_callback(cb: "Callable[[dict], None]") -> None:
+    global _BROADCAST_CB
+    _BROADCAST_CB = cb
+
 
 # ── Genre/Region Mapping ──────────────────────────────────────────────────────
 
@@ -1062,6 +1071,12 @@ class OrganizerDB:
                 );
             """)
             self.conn.commit()
+            for col in ("orig_genre", "orig_artist", "orig_album", "orig_title"):
+                try:
+                    self.conn.execute(f"ALTER TABLE processed ADD COLUMN {col} TEXT")
+                except Exception:
+                    pass
+            self.conn.commit()
 
     def is_processed(self, file_id: str, spotify_id: Optional[str] = None) -> bool:
         with self.lock:
@@ -1071,16 +1086,42 @@ class OrganizerDB:
             ).fetchone()
             return row is not None
 
-    def mark_processed(self, file_id, spotify_id, source, genre, artist, album, title, musik_path) -> None:
+    def mark_processed(self, file_id: str, spotify_id: str, source: str, genre: str, artist: str = "", album: str = "", title: str = "", musik_path: str = "", orig_genre: str = "", orig_artist: str = "", orig_album: str = "", orig_title: str = "") -> None:
         with self.lock:
             self.conn.execute(
                 """INSERT OR REPLACE INTO processed
-                   (file_id, spotify_id, source, genre, artist, album, title, musik_path, processed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (file_id, spotify_id, source, genre, artist, album, title, musik_path, processed_at,
+                    orig_genre, orig_artist, orig_album, orig_title)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (file_id, spotify_id, source, genre, artist, album, title,
-                 musik_path, int(time.time())),
+                 musik_path, int(time.time()), orig_genre, orig_artist, orig_album, orig_title),
             )
             self.conn.commit()
+
+    def get_processed_by_spotify_ids(self, ids: list) -> dict:
+        if not ids:
+            return {}
+        with self.lock:
+            placeholders = ','.join('?' * len(ids))
+            rows = self.conn.execute(
+                f"""SELECT spotify_id, genre, artist, album, title,
+                           orig_genre, orig_artist, orig_album, orig_title
+                    FROM processed WHERE spotify_id IN ({placeholders})""",
+                ids,
+            ).fetchall()
+        return {
+            r['spotify_id']: {
+                'genre': r['genre'] or '',
+                'artist': r['artist'] or '',
+                'album': r['album'] or '',
+                'title': r['title'] or '',
+                'orig_genre': r['orig_genre'] or '',
+                'orig_artist': r['orig_artist'] or '',
+                'orig_album': r['orig_album'] or '',
+                'orig_title': r['orig_title'] or '',
+            }
+            for r in rows
+        }
 
     def get_cached_genres(self, artist: str) -> Optional[list]:
         with self.lock:
@@ -2038,6 +2079,17 @@ class MetadataVoter:
         entry: dict = {"step": step, "name": name}
         entry.update(kwargs)
         self.audit_log.append(entry)
+        if _BROADCAST_CB:
+            try:
+                _BROADCAST_CB({
+                    "type": "organizer",
+                    "track_id": getattr(self, "_current_track_id", ""),
+                    "song_name": getattr(self, "_current_song_name", ""),
+                    "step": entry["step"],
+                    "step_name": entry["name"],
+                })
+            except Exception:
+                pass
 
     def resolve(
         self,
@@ -2047,6 +2099,8 @@ class MetadataVoter:
         track_id: Optional[str] = None,
     ) -> dict:
         """Full 11-Schritt pipeline. Returns resolved metadata dict."""
+        self._current_track_id = str(track_id or "")
+        self._current_song_name = tags.get("title") or path.stem
         self.audit_log = []
         orig = {
             "orig_genre": tags.get("genre") or "",
@@ -2218,6 +2272,15 @@ class MetadataVoter:
             "steps": self.audit_log,
             "cache": {"action": "written"},
         })
+        if _BROADCAST_CB:
+            try:
+                _BROADCAST_CB({
+                    "type": "organizer_done",
+                    "track_id": self._current_track_id,
+                    "song_name": self._current_song_name,
+                })
+            except Exception:
+                pass
         return output
 
     def _step0_fingerprint(self, path: Path, tags: dict, source: str) -> dict:
@@ -2478,6 +2541,10 @@ def _insert_scanner_track(
     title: str,
     genre: str,
     db: Optional[OrganizerDB] = None,
+    orig_genre: str = "",
+    orig_artist: str = "",
+    orig_album: str = "",
+    orig_title: str = "",
 ) -> None:
     """Markiert eine Scanner-Datei in der organizer.db als gesehen."""
     if db is None:
@@ -2487,6 +2554,8 @@ def _insert_scanner_track(
         db.mark_processed(
             file_id, spotify_id, "scanner", genre,
             "", "", title, str(path),
+            orig_genre=orig_genre, orig_artist=orig_artist,
+            orig_album=orig_album, orig_title=orig_title,
         )
 
 
@@ -2599,7 +2668,10 @@ def process_file(  # noqa: PLR0914
         orig_title = tags.get("title") or path.stem
         if source == "scanner":
             scanner_spotify_id = tags.get("spotify_id") or f"scanner:{path.stem}"
-            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre, db=db)
+            _insert_scanner_track(
+                path, scanner_spotify_id, orig_title or path.stem, orig_genre, db=db,
+                orig_genre=orig_genre, orig_artist=orig_artist, orig_album=orig_album, orig_title=orig_title,
+            )
         raw_artist = resolver.apply_artist_alias(tags.get("artist") or "Sonstiges")
         artist_p = _primary_artist(raw_artist)
         title = _sanitize(tags.get("title") or path.stem)
@@ -2622,7 +2694,10 @@ def process_file(  # noqa: PLR0914
         # Scanner: register in monitor.db before the move
         if source == "scanner":
             scanner_spotify_id = tags.get("spotify_id") or f"scanner:{path.stem}"
-            _insert_scanner_track(path, scanner_spotify_id, orig_title or path.stem, orig_genre, db=db)
+            _insert_scanner_track(
+                path, scanner_spotify_id, orig_title or path.stem, orig_genre, db=db,
+                orig_genre=orig_genre, orig_artist=orig_artist, orig_album=orig_album, orig_title=orig_title,
+            )
 
         raw_artist = resolver.apply_artist_alias(resolved.get("artist") or "Sonstiges")
         artist_p = _primary_artist(raw_artist)
@@ -2648,6 +2723,15 @@ def process_file(  # noqa: PLR0914
         path, genre, artist, album, title,
         orig_genre=orig_genre, orig_artist=orig_artist, orig_album=orig_album, orig_title=orig_title,
     )
+    if source != "scanner":
+        file_id = _file_id(path, tags)
+        spotify_id = tags.get("spotify_id") or ""
+        db.mark_processed(
+            file_id, spotify_id, source, genre,
+            artist, album, title, str(target),
+            orig_genre=orig_genre, orig_artist=orig_artist,
+            orig_album=orig_album, orig_title=orig_title,
+        )
     return True
 
 
