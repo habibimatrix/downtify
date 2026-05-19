@@ -2,6 +2,14 @@ FROM python:3.13-alpine AS builder
 
 WORKDIR /build
 
+RUN apk add --no-cache \
+    build-base \
+    python3-dev \
+    libffi-dev \
+    openssl-dev \
+    cargo \
+    rust
+
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir --root-user-action ignore -r requirements.txt
