@@ -116,6 +116,8 @@ export default {
   organizer: {
     title: 'Regras do Organizador',
     subtitle: 'Gerencie regras de gênero e apelidos de artistas.',
+    tabGenreRules: 'Regras de Gênero',
+    tabArtistSettings: 'Configurações de Artista',
     genreRules: 'Regras de Gênero',
     genreRulesHint:
       'A primeira correspondência vence. Novas regras são adicionadas no topo (maior prioridade).',

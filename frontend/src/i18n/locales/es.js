@@ -116,6 +116,8 @@ export default {
   organizer: {
     title: 'Reglas del Organizador',
     subtitle: 'Gestiona reglas de género y alias de artistas.',
+    tabGenreRules: 'Reglas de Género',
+    tabArtistSettings: 'Ajustes de Artista',
     genreRules: 'Reglas de Género',
     genreRulesHint:
       'La primera coincidencia gana. Las nuevas reglas se añaden arriba (máxima prioridad).',

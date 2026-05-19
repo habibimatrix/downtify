@@ -68,6 +68,29 @@
       </div>
 
       <template v-else>
+        <!-- ── Tab navigation ─────────────────────────────────────────────── -->
+        <div class="tabs tabs-border mb-8">
+          <button
+            class="tab"
+            :class="{ 'tab-active': activeTab === 'genre' }"
+            @click="activeTab = 'genre'"
+          >
+            {{ t('organizer.tabGenreRules') }}
+          </button>
+          <button
+            class="tab"
+            :class="{ 'tab-active': activeTab === 'artist' }"
+            @click="activeTab = 'artist'"
+          >
+            {{ t('organizer.tabArtistSettings') }}
+          </button>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <!-- TAB 2: ARTIST SETTINGS                                   -->
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'artist'">
+
         <!-- ══════════════════════════════════════════════════════════ -->
         <!-- ARTIST → GENRE RULES (highest priority)                  -->
         <!-- ══════════════════════════════════════════════════════════ -->
@@ -155,6 +178,13 @@
             </ul>
           </div>
         </section>
+
+        </div><!-- end TAB 2: ARTIST SETTINGS -->
+
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <!-- TAB 1: GENRE RULES                                        -->
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'genre'">
 
         <!-- ══════════════════════════════════════════════════════════ -->
         <!-- GENRE RULES                                               -->
@@ -435,6 +465,10 @@
           </div>
         </section>
 
+        </div><!-- end TAB 1: GENRE RULES -->
+
+        <!-- ── Cache Editor (Artist Settings tab) ──────────────────────────── -->
+        <div v-show="activeTab === 'artist'">
         <!-- ── Cache Editor ──────────────────────────────────────────────── -->
         <section
           class="mt-8 rounded-2xl border border-base-content/10 overflow-hidden"
@@ -572,6 +606,7 @@
             </button>
           </div>
         </section>
+        </div><!-- end Cache Editor artist tab -->
       </template>
     </div>
   </div>
@@ -589,6 +624,7 @@ const GENRE_PAGE_SIZE = 50
 
 const { t } = useI18n()
 
+const activeTab = ref('genre')
 const loading = ref(true)
 const saving = ref(false)
 const saveResult = ref('')

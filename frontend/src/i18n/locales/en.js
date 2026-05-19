@@ -115,6 +115,8 @@ export default {
   organizer: {
     title: 'Organizer Rules',
     subtitle: 'Manage genre rules and artist alias mappings.',
+    tabGenreRules: 'Genre Rules',
+    tabArtistSettings: 'Artist Settings',
     genreRules: 'Genre Rules',
     genreRulesHint:
       'First match wins. New rules are added at the top (highest priority).',
