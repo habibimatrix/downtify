@@ -333,6 +333,24 @@ class PlaylistMonitorDB:
         pages = max(1, (total + limit - 1) // limit)
         return items, total, pages
 
+    def get_spotify_id_for_download(self, track_id: int) -> Optional[str]:
+        """Return track_spotify_id for a downloaded_tracks row by id."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT track_spotify_id FROM downloaded_tracks WHERE id=?",
+                (track_id,),
+            ).fetchone()
+        return row['track_spotify_id'] if row else None
+
+    def get_filename_for_spotify_id(self, track_spotify_id: str) -> Optional[str]:
+        """Return filename for a track_spotify_id, or None if not found."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT filename FROM downloaded_tracks WHERE track_spotify_id=? LIMIT 1",
+                (track_spotify_id,),
+            ).fetchone()
+        return row['filename'] if row else None
+
     def delete_download(self, track_id: int) -> bool:
         """Remove a track from the List of Truth so it can be re-downloaded."""
         with self._connect() as conn:
