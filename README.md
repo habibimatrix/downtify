@@ -21,34 +21,44 @@
 
 ## What is DowntiplX?
 
-DowntiplX is a fork of [Downtify](https://github.com/henriquesebastiao/downtify) with one core philosophy added:
+DowntiplX started as a personal fork of [Downtify](https://github.com/henriquesebastiao/downtify) — a project that already solved the hard part beautifully: paste a Spotify link, get a perfectly tagged audio file in seconds, no API key, no account needed. That works out of the box and is genuinely impressive engineering.
+
+What DowntiplX adds on top is a single obsession:
 
 > *A well-organized NAS folder is not a luxury — it's a requirement.*
 
-Paste a Spotify link. Get a perfectly tagged audio file. Then watch the **12-step Organizer pipeline** classify it, vote on the correct genre across 6 independent sources, apply your custom rules, and cache the result — so the next song by the same artist takes milliseconds instead of seconds.
+The **12-step Organizer pipeline** classifies every downloaded file, votes on the correct genre across up to 6 independent sources, applies your custom rules, and caches the result permanently — so the next song by the same artist takes milliseconds instead of seconds.
 
-Everything runs inside a single Docker container. No Spotify API key. No account. No cloud dependency.
+All of the original Downtify features are preserved. The Organizer layer is purely additive.
 
 ---
 
-## DowntiplX vs. Downtify
+## Built on Downtify
 
-| Feature | Downtify (upstream) | DowntiplX |
-|---|---|---|
-| Download tracks / albums / playlists | ✅ | ✅ |
-| Playlist Monitor (auto-download new songs) | ✅ | ✅ |
-| Multi-format: MP3 · FLAC · M4A · OGG · OPUS | ✅ | ✅ |
-| Real-time progress via WebSocket | ✅ | ✅ |
-| Multi-language UI (EN / ES / PT-BR) | ✅ | ✅ |
-| Organize by Artist (simple) | ✅ | Replaced by Organizer |
-| **12-step Organizer pipeline** | ❌ | ✅ |
-| **Artist-Knowledge-Cache** | ❌ | ✅ Learns permanently |
-| **Audit trail per song** | ❌ | ✅ Every step traceable |
-| **pfad_-prefix fast import** | ❌ | ✅ API-free batch import |
-| **SoundCloud via HTML-paste** | ❌ | ✅ No outbound requests |
-| **3-section download view** | ❌ | ✅ Active / Organizing / Done |
-| **API health status bar** | ❌ | ✅ On welcome page |
-| Logo | Green | Orange PLX |
+DowntiplX is built on top of [Downtify by henriquesebastiao](https://github.com/henriquesebastiao/downtify). The original already ships everything you need to just download music:
+
+- Spotify links (tracks, albums, playlists) without any API key
+- YouTube Music as audio source via `ytmusicapi`
+- Full metadata tagging with `mutagen`
+- Playlist Monitor for hands-free auto-downloads
+- Multi-format output, real-time progress, multi-language UI
+
+DowntiplX extends this with the **Organizer** — a genre classification engine that runs after every download and sorts your library automatically. If you just want a downloader, the original Downtify is the right tool. If you want a self-organizing music library on your NAS, that's what this fork is for.
+
+---
+
+## What's Added in DowntiplX
+
+| Feature | Details |
+|---|---|
+| **12-step Organizer pipeline** | Votes on genre across up to 6 sources, classifies and moves each file |
+| **Artist-Knowledge-Cache** | Remembers every artist permanently — no repeat API calls |
+| **Audit trail** | Every pipeline step logged; click Audit on any song to see exactly what happened |
+| **pfad_-prefix import** | Batch-import pre-tagged files without any API lookups |
+| **SoundCloud via HTML-paste** | Extract `client_id` locally — works in air-gapped containers |
+| **3-section download view** | Separate panels for Active / Organizing / Done |
+| **API health status bar** | Live green/red dots per API on the welcome page |
+| **Orange PLX branding** | New logo and identity |
 
 ---
 
@@ -91,6 +101,49 @@ ports:
 
 ---
 
+## API Keys
+
+The base download pipeline (Spotify link → YouTube Music → file) works without any keys — that's what Downtify already delivers.
+
+The **Organizer pipeline** can optionally query additional APIs for richer genre classification. None are strictly required, but each one adds another vote in the genre election:
+
+| API | Env variable | Used for | Required? | Get your key |
+|---|---|---|---|---|
+| **Spotify API** | `CLIENT_ID` + `CLIENT_SECRET` | Genre, artist, album metadata in Organizer step 1 | Optional (adds best genre source) | [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) → Create app |
+| **Last.fm API** | `LASTFM_API_KEY` | Genre tags from Last.fm's extensive database | Optional (very good for genre) | [last.fm/api/account/create](https://www.last.fm/api/account/create) |
+| **AcoustID** | `ACOUSTID_API_KEY` | Audio fingerprinting — identifies songs by their actual audio | Optional (step 8, last resort) | [acoustid.org/login](https://acoustid.org/login) → My Applications |
+| **Discogs** | `DISCOGS_TOKEN` | Genre and style tags from the Discogs record database | Optional (good for electronic/DJ genres) | [discogs.com/settings/developers](https://www.discogs.com/settings/developers) → Generate token |
+| **AudD** | `AUDD_API_TOKEN` | Audio recognition for the scanner import (identifies unknown files) | Optional (scanner only) | [dashboard.audd.io](https://dashboard.audd.io) |
+| **SoundCloud** | `SOUNDCLOUD_CLIENT_ID` | SoundCloud as a 6th metadata source | Optional | See [SoundCloud section](#soundcloud-support) below |
+
+**MusicBrainz** (step 6) is always active and needs no key — it's a free open database queried via the public API.
+
+### Adding Keys via Docker Compose
+
+```yaml
+services:
+  downtiplx:
+    container_name: downtiplx
+    image: ghcr.io/habibimatrix/downtify:latest
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./downloads:/downloads
+      - ./data:/data
+    environment:
+      - CLIENT_ID=your_spotify_client_id
+      - CLIENT_SECRET=your_spotify_client_secret
+      - LASTFM_API_KEY=your_lastfm_key
+      - ACOUSTID_API_KEY=your_acoustid_key
+      - DISCOGS_TOKEN=your_discogs_token
+      - AUDD_API_TOKEN=your_audd_token
+    restart: unless-stopped
+```
+
+The more keys you provide, the more sources vote on each song's genre — and the higher the confidence score. Without any keys, the Organizer falls back to file tags and filename parsing, which still works but gives lower accuracy for genre classification.
+
+---
+
 ## How It Works — Download Pipeline
 
 ```
@@ -102,7 +155,7 @@ Spotify embed page  →  YouTube Music search  →  yt-dlp + ffmpeg + mutagen
   /downloads/<Genre>/<Artist> - <Title>.mp3
 ```
 
-1. **Metadata** — Spotify links resolved by scraping `open.spotify.com/embed`. No credentials required.
+1. **Metadata** — Spotify links resolved by scraping `open.spotify.com/embed`. No Spotify API key required for downloads (only for the Organizer's metadata enrichment — see [API Keys](#api-keys)).
 2. **Audio match** — [`ytmusicapi`](https://ytmusicapi.readthedocs.io/) searches YouTube Music, picks the best match by duration comparison.
 3. **Download & tag** — [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) downloads, `ffmpeg` converts, [`mutagen`](https://mutagen.readthedocs.io/) embeds all metadata.
 4. **Organize** — The Organizer pipeline places the file in the correct genre/artist folder.
