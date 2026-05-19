@@ -21,21 +21,16 @@ def test_default_settings_has_required_keys():
         'bitrate',
         'output',
         'generate_m3u',
-        'organize_by_artist',
     }
     assert required <= set(DEFAULT_SETTINGS)
 
 
-def test_default_organize_by_artist_is_false():
-    assert DEFAULT_SETTINGS['organize_by_artist'] is False
+def test_default_generate_m3u_is_false():
+    assert DEFAULT_SETTINGS['generate_m3u'] is False
 
 
-def test_default_generate_m3u_is_true():
-    assert DEFAULT_SETTINGS['generate_m3u'] is True
-
-
-def test_default_download_lyrics_is_true():
-    assert DEFAULT_SETTINGS['download_lyrics'] is True
+def test_default_download_lyrics_is_false():
+    assert DEFAULT_SETTINGS['download_lyrics'] is False
 
 
 def test_default_format_is_mp3():
@@ -84,11 +79,11 @@ def test_load_settings_handles_non_dict_json(tmp_path):
     assert result == DEFAULT_SETTINGS
 
 
-def test_load_settings_preserves_organize_by_artist(tmp_path):
+def test_load_settings_preserves_known_keys(tmp_path):
     path = tmp_path / 'settings.json'
-    path.write_text(json.dumps({'organize_by_artist': True}), encoding='utf-8')
+    path.write_text(json.dumps({'format': 'flac'}), encoding='utf-8')
     result = _load_settings(path)
-    assert result['organize_by_artist'] is True
+    assert result['format'] == 'flac'
 
 
 def test_load_settings_empty_object_returns_defaults(tmp_path):

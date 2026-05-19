@@ -5,13 +5,12 @@ import API from '/src/model/api'
 const settings = ref({
   audio_providers: [''],
   lyrics_providers: [''],
-  download_lyrics: true,
+  download_lyrics: false,
   format: '',
   bitrate: '320',
   output: '',
-  generate_m3u: true,
-  organize_by_artist: false,
-  max_parallel_downloads: 3,
+  generate_m3u: false,
+  max_parallel_downloads: 1,
 })
 
 const settingsOptions = {

@@ -81,13 +81,12 @@ def _is_authenticated(request: Request) -> bool:
 DEFAULT_SETTINGS: dict[str, Any] = {
     'audio_providers': ['youtube-music'],
     'lyrics_providers': ['lrclib'],
-    'download_lyrics': True,
+    'download_lyrics': False,
     'format': 'mp3',
     'bitrate': '320',
     'output': '{artists} - {title}.{output-ext}',
-    'generate_m3u': True,
-    'max_parallel_downloads': 3,
-    'organize_by_artist': False,
+    'generate_m3u': False,
+    'max_parallel_downloads': 1,
     'genre_rules': None,        # None = use hardcoded defaults
     'artist_rules': [],
     'artist_genre_rules': [],   # [{pattern, genre}] — highest-priority override
@@ -491,17 +490,13 @@ async def _process_batch(
     if not entries:
         return
 
-    # When organize_by_artist is on, songs land in per-artist folders instead
-    # of the playlist subfolder, so the M3U must go to the legacy Playlists/
-    # directory (playlist_subdir=None) where relative paths still resolve.
-    organize = bool(state.downloader and state.downloader.organize_by_artist)
     try:
         await asyncio.to_thread(
             m3u.write_m3u,
             state.downloader.download_dir,
             playlist_name,
             entries,
-            playlist_subdir=None if organize else playlist_subdir,
+            playlist_subdir=playlist_subdir,
         )
     except Exception:
         logger.exception('Failed to write M3U for {}', playlist_url)
@@ -619,12 +614,11 @@ async def write_playlist_m3u_endpoint(request: Request) -> dict[str, Any]:
 
     entries = [t for t in tracks if isinstance(t, dict)]
     playlist_subdir = m3u.sanitize_playlist_name(playlist_name)
-    organize = bool(state.downloader and state.downloader.organize_by_artist)
     target, kept = m3u.write_m3u(
         state.downloader.download_dir,
         playlist_name,
         entries,
-        playlist_subdir=None if organize else playlist_subdir,
+        playlist_subdir=playlist_subdir,
     )
     if target is None:
         raise HTTPException(
@@ -665,10 +659,6 @@ async def update_settings_endpoint(
             if 'lyrics_providers' in payload or 'download_lyrics' in payload:
                 state.downloader.lyrics_providers = (
                     _effective_lyrics_providers(state.settings)
-                )
-            if 'organize_by_artist' in payload:
-                state.downloader.organize_by_artist = bool(
-                    payload['organize_by_artist']
                 )
         if 'max_parallel_downloads' in payload:
             try:
@@ -799,6 +789,27 @@ async def soundcloud_discover_client_id() -> dict[str, Any]:
     if not cid:
         raise HTTPException(status_code=404, detail='client_id nicht gefunden')
     # Direkt aktivieren + in Settings persistieren
+    _sc_set(cid)
+    state.settings['soundcloud_client_id'] = cid
+    if state.settings_path is not None:
+        _save_settings_full(state.settings_path, state.settings)
+    return {'client_id': cid}
+
+
+@router.post('/api/soundcloud/extract')
+async def soundcloud_extract_client_id(request: Request) -> dict[str, Any]:
+    """Extrahiert die client_id aus vom User eingefügtem SoundCloud-HTML."""
+    import re
+
+    body = await request.json()
+    html = body.get('html', '')
+    if not html:
+        raise HTTPException(status_code=400, detail='html field required')
+    match = re.search(r'["\']client_id["\']\s*:\s*["\']([a-zA-Z0-9]{20,})["\']', html)
+    if not match:
+        raise HTTPException(status_code=404, detail='client_id not found in HTML')
+    cid = match.group(1)
+    from .soundcloud import set_client_id as _sc_set
     _sc_set(cid)
     state.settings['soundcloud_client_id'] = cid
     if state.settings_path is not None:

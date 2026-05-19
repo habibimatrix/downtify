@@ -165,6 +165,10 @@ function discoverSoundcloudClientId() {
   return API.get('/api/soundcloud/discover')
 }
 
+function extractSoundcloudClientId(html) {
+  return API.post('/api/soundcloud/extract', { html })
+}
+
 function authStatus() {
   return API.get('/api/auth')
 }
@@ -216,6 +220,7 @@ export default {
   deleteCacheTrack,
   clearAllCache,
   discoverSoundcloudClientId,
+  extractSoundcloudClientId,
   authStatus,
   authLogin,
   authLogout,

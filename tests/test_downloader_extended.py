@@ -1,5 +1,4 @@
-"""Extended tests for Downloader: _format_basename, _artist_subdir and
-organize_by_artist routing logic."""
+"""Extended tests for Downloader: _format_basename and existing_filename_for routing."""
 
 from __future__ import annotations
 
@@ -64,75 +63,11 @@ def test_format_basename_bad_template_falls_back(tmp_path):
     assert 'Song' in result
 
 
-# ── _artist_subdir ────────────────────────────────────────────────────────────
+# ── existing_filename_for routing ─────────────────────────────────────────────
 
 
-def test_artist_subdir_returns_first_artist():
-    result = Downloader._artist_subdir({
-        'artists': ['Arctic Monkeys', 'Other']
-    })
-    assert result == 'Arctic Monkeys'
-
-
-def test_artist_subdir_empty_list_returns_unknown():
-    assert Downloader._artist_subdir({'artists': []}) == 'unknown'
-
-
-def test_artist_subdir_missing_key_returns_unknown():
-    assert Downloader._artist_subdir({}) == 'unknown'
-
-
-def test_artist_subdir_sanitizes_slashes():
-    result = Downloader._artist_subdir({'artists': ['AC/DC']})
-    assert '/' not in result
-
-
-def test_artist_subdir_sanitizes_colons():
-    result = Downloader._artist_subdir({'artists': ['Artist: Live']})
-    assert ':' not in result
-
-
-# ── organize_by_artist – existing_filename_for ────────────────────────────────
-
-
-def test_organize_by_artist_finds_file_in_artist_dir(tmp_path):
-    d = _make(tmp_path, organize_by_artist=True)
-    artist_dir = tmp_path / 'Arctic Monkeys'
-    artist_dir.mkdir()
-    (artist_dir / 'Arctic Monkeys - Do I Wanna Know.mp3').write_bytes(b'\x00')
-    result = d.existing_filename_for({
-        'name': 'Do I Wanna Know',
-        'artists': ['Arctic Monkeys'],
-    })
-    assert result == 'Arctic Monkeys/Arctic Monkeys - Do I Wanna Know.mp3'
-
-
-def test_organize_by_artist_ignores_subdir_param(tmp_path):
-    # File is in a playlist folder — should NOT be found when organize=True,
-    # because the lookup targets the artist folder, not the playlist folder.
-    d = _make(tmp_path, organize_by_artist=True)
-    pl_dir = tmp_path / 'My Playlist'
-    pl_dir.mkdir()
-    (pl_dir / 'Artist - Song.mp3').write_bytes(b'\x00')
-    result = d.existing_filename_for(
-        {'name': 'Song', 'artists': ['Artist']}, subdir='My Playlist'
-    )
-    assert result is None
-
-
-def test_organize_by_artist_finds_in_artist_dir_regardless_of_subdir(tmp_path):
-    d = _make(tmp_path, organize_by_artist=True)
-    artist_dir = tmp_path / 'Artist'
-    artist_dir.mkdir()
-    (artist_dir / 'Artist - Song.mp3').write_bytes(b'\x00')
-    result = d.existing_filename_for(
-        {'name': 'Song', 'artists': ['Artist']}, subdir='Some Playlist'
-    )
-    assert result == 'Artist/Artist - Song.mp3'
-
-
-def test_organize_by_artist_false_keeps_playlist_routing(tmp_path):
-    d = _make(tmp_path, organize_by_artist=False)
+def test_existing_filename_finds_file_in_playlist_dir(tmp_path):
+    d = _make(tmp_path)
     pl_dir = tmp_path / 'My Playlist'
     pl_dir.mkdir()
     (pl_dir / 'Artist - Song.mp3').write_bytes(b'\x00')
@@ -142,18 +77,8 @@ def test_organize_by_artist_false_keeps_playlist_routing(tmp_path):
     assert result == 'My Playlist/Artist - Song.mp3'
 
 
-def test_organize_by_artist_false_finds_root_file_without_subdir(tmp_path):
-    d = _make(tmp_path, organize_by_artist=False)
+def test_existing_filename_finds_root_file_without_subdir(tmp_path):
+    d = _make(tmp_path)
     (tmp_path / 'Artist - Song.mp3').write_bytes(b'\x00')
     result = d.existing_filename_for({'name': 'Song', 'artists': ['Artist']})
     assert result == 'Artist - Song.mp3'
-
-
-def test_organize_by_artist_default_is_false(tmp_path):
-    d = Downloader(tmp_path)
-    assert d.organize_by_artist is False
-
-
-def test_organize_by_artist_can_be_set_true(tmp_path):
-    d = Downloader(tmp_path, organize_by_artist=True)
-    assert d.organize_by_artist is True

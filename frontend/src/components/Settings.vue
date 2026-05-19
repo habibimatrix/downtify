@@ -193,29 +193,6 @@
           </label>
         </div>
 
-        <!-- File organization -->
-        <div>
-          <label
-            class="block text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2"
-          >
-            {{ t('settings.organizationSection') }}
-          </label>
-          <label
-            class="flex items-start gap-3 rounded-xl border border-white/10 bg-base-100/85 px-3 py-2.5 cursor-pointer hover:border-white/20"
-          >
-            <input
-              type="checkbox"
-              class="checkbox checkbox-sm checkbox-primary mt-0.5"
-              v-model="sm.settings.value.organize_by_artist"
-            />
-            <span class="flex-1 text-sm">
-              <span class="block">{{ t('settings.organizeByArtist') }}</span>
-              <span class="block text-[11px] text-base-content/50">
-                {{ t('settings.organizeByArtistHint') }}
-              </span>
-            </span>
-          </label>
-        </div>
 
         <!-- Parallel downloads -->
         <div>
@@ -255,24 +232,36 @@
           <p class="text-[11px] text-base-content/40 mb-2">
             {{ t('organizer.soundcloudHint') }}
           </p>
-          <div class="flex gap-2">
-            <input
-              v-model="soundcloudClientId"
-              type="text"
-              class="input input-sm h-9 flex-1 font-mono text-xs rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60"
-              :placeholder="t('organizer.soundcloudPlaceholder')"
+          <input
+            v-model="soundcloudClientId"
+            type="text"
+            class="input input-sm h-9 w-full font-mono text-xs rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60"
+            :placeholder="t('organizer.soundcloudPlaceholder')"
+          />
+          <!-- HTML-paste section -->
+          <div class="mt-3">
+            <div class="flex items-center gap-1.5 mb-1.5">
+              <p class="text-[11px] text-base-content/40 flex-1">
+                {{ t('organizer.soundcloudHtmlHint') }}
+              </p>
+            </div>
+            <textarea
+              v-model="scHtmlPaste"
+              rows="3"
+              class="textarea textarea-sm w-full text-xs font-mono rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 resize-none"
+              :placeholder="t('organizer.soundcloudHtmlPlaceholder')"
             />
             <button
-              class="btn btn-sm h-9 px-3 border-white/10 bg-base-100/85 hover:bg-base-100 rounded-xl"
-              :disabled="scDiscovering"
-              @click="discoverSoundcloudId"
+              class="btn btn-sm h-9 px-3 mt-2 border-white/10 bg-base-100/85 hover:bg-base-100 rounded-xl"
+              :disabled="scDiscovering || !scHtmlPaste.trim()"
+              @click="extractSoundcloudIdFromHtml"
             >
               <span
                 v-if="scDiscovering"
                 class="loading loading-spinner loading-xs mr-1"
               />
-              <Icon v-else icon="clarity:search-line" class="h-4 w-4 mr-1" />
-              {{ t('organizer.soundcloudDiscover') }}
+              <Icon v-else icon="clarity:code-line" class="h-4 w-4 mr-1" />
+              {{ t('organizer.soundcloudExtract') }}
             </button>
           </div>
           <p
@@ -281,9 +270,6 @@
             :class="scError ? 'text-error' : 'text-success'"
           >
             {{ scMsg }}
-          </p>
-          <p class="text-[11px] text-base-content/30 mt-1">
-            {{ t('organizer.soundcloudNote') }}
           </p>
         </div>
 
@@ -478,6 +464,7 @@ async function testApis() {
 }
 
 const soundcloudClientId = ref('')
+const scHtmlPaste = ref('')
 const scDiscovering = ref(false)
 const scMsg = ref('')
 const scError = ref(false)
@@ -489,16 +476,15 @@ async function loadSoundcloudId() {
   } catch {}
 }
 
-async function discoverSoundcloudId() {
+async function extractSoundcloudIdFromHtml() {
+  if (!scHtmlPaste.value.trim()) return
   scDiscovering.value = true
   scMsg.value = ''
   scError.value = false
   try {
-    const res = await API.discoverSoundcloudClientId()
+    const res = await API.extractSoundcloudClientId(scHtmlPaste.value)
     soundcloudClientId.value = res.data.client_id
-    await API.saveOrganizerConfig({
-      soundcloud_client_id: soundcloudClientId.value,
-    })
+    scHtmlPaste.value = ''
     scMsg.value = t('organizer.soundcloudFound')
   } catch {
     scError.value = true

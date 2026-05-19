@@ -34,6 +34,7 @@ export default {
     songs: 'Músicas',
     albums: 'Álbuns',
     playlists: 'Playlists',
+    checkingApis: 'Verificando APIs…',
   },
   search: {
     placeholder:
@@ -148,13 +149,17 @@ export default {
     soundcloudTitle: 'SoundCloud Client ID',
     soundcloudHint:
       'Necessário para usar o SoundCloud como 6ª fonte de metadados durante a votação.',
-    soundcloudPlaceholder: 'Cole client_id ou clique em Auto-detectar…',
+    soundcloudPlaceholder: 'Cole client_id…',
     soundcloudDiscover: 'Auto-detectar',
-    soundcloudFound: 'Client ID detectado e salvo.',
+    soundcloudFound: 'Client ID extraído e salvo.',
     soundcloudNotFound:
-      'Não foi possível extrair o client ID do SoundCloud. Tente colar manualmente.',
+      'Não foi possível extrair o client ID. Certifique-se de ter colado o código-fonte completo.',
     soundcloudNote:
-      'O SoundCloud rotaciona esse ID a cada poucos meses. Se as buscas pararem de funcionar, clique em Auto-detectar novamente.',
+      'O SoundCloud rotaciona esse ID a cada poucos meses. Cole o código-fonte novamente quando as buscas pararem de funcionar.',
+    soundcloudHtmlHint:
+      'Abra soundcloud.com no navegador → Ctrl+U → copie tudo → cole aqui:',
+    soundcloudHtmlPlaceholder: 'Cole o código-fonte do soundcloud.com aqui…',
+    soundcloudExtract: 'Extrair client_id',
     separatorTokens: 'Separadores de Artista',
     separatorTokensHint:
       'Ao votar nos nomes de artistas entre as fontes, esses tokens são usados para dividir entradas (ex.: "feat.", "&"). A contagem é feita com nomes individuais.',

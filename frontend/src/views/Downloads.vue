@@ -367,6 +367,9 @@ import {
   activeDownloadCount,
   activeOrganizerCount,
 } from '/src/model/downloadStore'
+import { useProgressTracker } from '/src/model/download'
+
+const pt = useProgressTracker()
 
 const PAGE_SIZE = 20
 const { t } = useI18n()
@@ -556,6 +559,10 @@ async function onDelete(item) {
     await API.deleteTruth(item.id)
     items.value = items.value.filter((i) => i.id !== item.id)
     total.value = Math.max(0, total.value - 1)
+    // Clear from in-memory queue so the song can be re-downloaded
+    if (item.track_spotify_id) {
+      pt.removeSong({ song_id: item.track_spotify_id })
+    }
     showSuccess(t('library.deleteSuccess'))
   } catch {
     error.value = t('library.failedDelete')

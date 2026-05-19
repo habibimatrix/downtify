@@ -34,6 +34,7 @@ export default {
     songs: 'Songs',
     albums: 'Albums',
     playlists: 'Playlists',
+    checkingApis: 'Checking APIs…',
   },
   search: {
     placeholder: 'Search, paste a Spotify or YouTube Music link…',
@@ -147,13 +148,17 @@ export default {
     soundcloudTitle: 'SoundCloud Client ID',
     soundcloudHint:
       'Required to use SoundCloud as a 6th metadata source during voting.',
-    soundcloudPlaceholder: 'Paste client_id or click Auto-detect…',
+    soundcloudPlaceholder: 'Paste client_id…',
     soundcloudDiscover: 'Auto-detect',
-    soundcloudFound: 'Client ID detected and saved.',
+    soundcloudFound: 'Client ID extracted and saved.',
     soundcloudNotFound:
-      'Could not extract client ID from SoundCloud. Try pasting it manually.',
+      'Could not extract client ID. Make sure you pasted the full page source.',
     soundcloudNote:
-      'SoundCloud rotates this ID every few months. If lookups stop working, click Auto-detect again.',
+      'SoundCloud rotates this ID every few months. Re-paste the page source when lookups stop working.',
+    soundcloudHtmlHint:
+      'Open soundcloud.com in your browser → Ctrl+U → copy all → paste here:',
+    soundcloudHtmlPlaceholder: 'Paste soundcloud.com page source here…',
+    soundcloudExtract: 'Extract client_id',
     separatorTokens: 'Artist Separator Tokens',
     separatorTokensHint:
       'When voting on artist names across sources, these tokens are used to split entries (e.g. "feat.", "&"). The voting then counts individual names.',
