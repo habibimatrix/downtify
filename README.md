@@ -1,11 +1,3 @@
-<div align="center">
-
-<a href="https://github.com/henriquesebastiao/downtify">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/628d4334-7326-446e-9f2a-4d3ab4fc95c3">
-    <img width="90" src="https://github.com/user-attachments/assets/628d4334-7326-446e-9f2a-4d3ab4fc95c3" alt="Downtiplx Logo">
-  </picture>
-</a>
 
 <h1>
   <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=32&pause=99999&color=E5A00D&center=true&vCenter=true&width=300&height=48&lines=Downtiplx" alt="Downtiplx" />
