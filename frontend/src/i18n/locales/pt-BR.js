@@ -94,7 +94,8 @@ export default {
   },
   apiHealth: {
     title: 'Status das APIs',
-    subtitle: 'Status em tempo real de todas as APIs integradas. Os erros são registrados em /data/API Fehler.log.',
+    subtitle:
+      'Status em tempo real de todas as APIs integradas. Os erros são registrados em /data/API Fehler.log.',
     test: 'Testar APIs',
     testing: 'Testando…',
     ok: 'OK',

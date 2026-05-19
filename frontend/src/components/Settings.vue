@@ -267,7 +267,10 @@
               :disabled="scDiscovering"
               @click="discoverSoundcloudId"
             >
-              <span v-if="scDiscovering" class="loading loading-spinner loading-xs mr-1" />
+              <span
+                v-if="scDiscovering"
+                class="loading loading-spinner loading-xs mr-1"
+              />
               <Icon v-else icon="clarity:search-line" class="h-4 w-4 mr-1" />
               {{ t('organizer.soundcloudDiscover') }}
             </button>
@@ -297,7 +300,10 @@
               :disabled="apiTesting"
               @click="testApis"
             >
-              <span v-if="apiTesting" class="loading loading-spinner loading-xs mr-1" />
+              <span
+                v-if="apiTesting"
+                class="loading loading-spinner loading-xs mr-1"
+              />
               {{ apiTesting ? t('apiHealth.testing') : t('apiHealth.test') }}
             </button>
           </div>
@@ -326,7 +332,8 @@
                   'text-warning/70': res.status === 'warning',
                   'text-error/70': res.status === 'error',
                 }"
-              >{{ res.detail }}</span>
+                >{{ res.detail }}</span
+              >
               <span
                 class="text-[10px] font-semibold uppercase shrink-0"
                 :class="{
@@ -431,7 +438,17 @@ const API_LABEL_MAP = {
   acoustid: 'apiHealth.acoustid',
 }
 
-const API_ORDER = ['yt_dlp', 'spotify', 'deezer', 'lastfm', 'discogs', 'musicbrainz', 'soundcloud', 'shazam', 'acoustid']
+const API_ORDER = [
+  'yt_dlp',
+  'spotify',
+  'deezer',
+  'lastfm',
+  'discogs',
+  'musicbrainz',
+  'soundcloud',
+  'shazam',
+  'acoustid',
+]
 
 function apiLabel(key) {
   return API_LABEL_MAP[key] ? t(API_LABEL_MAP[key]) : key
@@ -442,14 +459,17 @@ const apiTesting = ref(false)
 
 const apiRows = computed(() => {
   if (!apiResults.value) return []
-  return API_ORDER.filter((k) => apiResults.value[k]).map((k) => [k, apiResults.value[k]])
+  return API_ORDER.filter((k) => apiResults.value[k]).map((k) => [
+    k,
+    apiResults.value[k],
+  ])
 })
 
 async function testApis() {
   apiTesting.value = true
   try {
     const res = await API.healthApis()
-    apiResults.value = res.data.results || res.data
+    apiResults.value = res.data.results || res.data.apis || res.data
   } catch {
     apiResults.value = null
   } finally {
@@ -476,7 +496,9 @@ async function discoverSoundcloudId() {
   try {
     const res = await API.discoverSoundcloudClientId()
     soundcloudClientId.value = res.data.client_id
-    await API.saveOrganizerConfig({ soundcloud_client_id: soundcloudClientId.value })
+    await API.saveOrganizerConfig({
+      soundcloud_client_id: soundcloudClientId.value,
+    })
     scMsg.value = t('organizer.soundcloudFound')
   } catch {
     scError.value = true
@@ -486,12 +508,15 @@ async function discoverSoundcloudId() {
   }
 }
 
-watch(soundcloudClientId, async (val) => {
-  if (val !== undefined) {
+let _scSaveTimer = null
+watch(soundcloudClientId, (val) => {
+  if (val === undefined) return
+  clearTimeout(_scSaveTimer)
+  _scSaveTimer = setTimeout(async () => {
     try {
       await API.saveOrganizerConfig({ soundcloud_client_id: val })
     } catch {}
-  }
+  }, 600)
 })
 
 onMounted(() => {

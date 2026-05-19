@@ -182,7 +182,9 @@ function healthApis() {
 }
 
 function ws_onmessage(fn) {
-  return (wsConnection.onmessage = fn)
+  const prev = wsConnection.onmessage
+  wsConnection.onmessage = fn
+  return prev
 }
 function ws_onerror(fn) {
   return (wsConnection.onerror = fn)

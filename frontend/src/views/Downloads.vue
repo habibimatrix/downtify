@@ -26,7 +26,10 @@
           @click="refresh"
           :disabled="loading"
         >
-          <span v-if="loading" class="loading loading-spinner loading-xs mr-2" />
+          <span
+            v-if="loading"
+            class="loading loading-spinner loading-xs mr-2"
+          />
           <Icon v-else icon="clarity:refresh-line" class="h-4 w-4 mr-2" />
           {{ t('common.refresh') }}
         </button>
@@ -65,7 +68,10 @@
                   {{ Math.round(job.progress) }}%
                 </span>
               </div>
-              <span v-if="job.message" class="text-xs text-base-content/40 truncate block">
+              <span
+                v-if="job.message"
+                class="text-xs text-base-content/40 truncate block"
+              >
                 {{ job.message }}
               </span>
             </div>
@@ -78,7 +84,10 @@
         <h2
           class="mb-2 text-xs font-semibold uppercase tracking-wider text-warning flex items-center gap-1.5"
         >
-          <Icon icon="clarity:organization-line" class="h-3.5 w-3.5 animate-pulse" />
+          <Icon
+            icon="clarity:organization-line"
+            class="h-3.5 w-3.5 animate-pulse"
+          />
           {{ t('library.organizing') }}
         </h2>
         <ul class="space-y-2">
@@ -98,7 +107,9 @@
               </span>
               <span class="text-xs text-warning/70">
                 {{ t('library.organizerStep', { step: job.step }) }}
-                <span class="text-base-content/40 ml-1">— {{ job.step_name }}</span>
+                <span class="text-base-content/40 ml-1"
+                  >— {{ job.step_name }}</span
+                >
               </span>
             </div>
           </li>
@@ -134,7 +145,10 @@
           v-if="error"
           class="surface rounded-2xl p-4 mb-4 flex gap-3 items-center text-sm text-error"
         >
-          <Icon icon="clarity:exclamation-circle-line" class="h-5 w-5 shrink-0" />
+          <Icon
+            icon="clarity:exclamation-circle-line"
+            class="h-5 w-5 shrink-0"
+          />
           <span>{{ error }}</span>
         </div>
 
@@ -159,9 +173,14 @@
           v-else-if="!loading && items.length === 0"
           class="surface rounded-2xl p-12 flex flex-col items-center text-center"
         >
-          <Icon icon="clarity:list-line" class="h-12 w-12 text-base-content/20 mb-4" />
+          <Icon
+            icon="clarity:list-line"
+            class="h-12 w-12 text-base-content/20 mb-4"
+          />
           <p class="text-base-content/50 text-sm">{{ t('library.empty') }}</p>
-          <p class="text-base-content/40 text-xs mt-1">{{ t('library.emptyHint') }}</p>
+          <p class="text-base-content/40 text-xs mt-1">
+            {{ t('library.emptyHint') }}
+          </p>
         </div>
 
         <!-- Track list -->
@@ -183,14 +202,18 @@
               <span class="text-sm font-medium truncate block">
                 {{ displayFilename(item) }}
               </span>
-              <span class="text-xs text-base-content/40 flex items-center gap-2 mt-0.5 flex-wrap">
+              <span
+                class="text-xs text-base-content/40 flex items-center gap-2 mt-0.5 flex-wrap"
+              >
                 <span v-if="item.playlist_name" class="text-primary/70">
                   <Icon
                     icon="clarity:playlist-line"
                     class="inline h-3 w-3 mr-0.5 align-text-top"
                   />{{ item.playlist_name }}
                 </span>
-                <span v-else class="text-base-content/30">{{ t('library.direct') }}</span>
+                <span v-else class="text-base-content/30">{{
+                  t('library.direct')
+                }}</span>
                 <span>·</span>
                 <span>{{ relativeDate(item.downloaded_at) }}</span>
                 <span v-if="item.filename" class="text-base-content/30">
@@ -206,38 +229,53 @@
                 <span
                   v-if="item.artist"
                   class="text-xs text-base-content/60"
-                  :title="item.orig_artist && item.orig_artist !== item.artist ? `Original: ${item.orig_artist}` : undefined"
+                  :title="
+                    item.orig_artist && item.orig_artist !== item.artist
+                      ? `Original: ${item.orig_artist}`
+                      : undefined
+                  "
                 >
                   <span class="text-base-content/30 mr-0.5">Artist</span>
                   {{ item.artist }}
                   <span
                     v-if="item.orig_artist && item.orig_artist !== item.artist"
                     class="text-base-content/30 text-[10px]"
-                  >← {{ item.orig_artist }}</span>
+                    >← {{ item.orig_artist }}</span
+                  >
                 </span>
                 <span
                   v-if="item.album"
                   class="text-xs text-base-content/60"
-                  :title="item.orig_album && item.orig_album !== item.album ? `Original: ${item.orig_album}` : undefined"
+                  :title="
+                    item.orig_album && item.orig_album !== item.album
+                      ? `Original: ${item.orig_album}`
+                      : undefined
+                  "
                 >
                   <span class="text-base-content/30 mr-0.5">Album</span>
                   {{ item.album }}
                   <span
                     v-if="item.orig_album && item.orig_album !== item.album"
                     class="text-base-content/30 text-[10px]"
-                  >← {{ item.orig_album }}</span>
+                    >← {{ item.orig_album }}</span
+                  >
                 </span>
                 <span
                   v-if="item.genre"
                   class="text-xs text-base-content/60"
-                  :title="item.orig_genre && item.orig_genre !== item.genre ? `Original: ${item.orig_genre}` : undefined"
+                  :title="
+                    item.orig_genre && item.orig_genre !== item.genre
+                      ? `Original: ${item.orig_genre}`
+                      : undefined
+                  "
                 >
                   <span class="text-base-content/30 mr-0.5">Genre</span>
                   {{ item.genre }}
                   <span
                     v-if="item.orig_genre && item.orig_genre !== item.genre"
                     class="text-base-content/30 text-[10px]"
-                  >← {{ item.orig_genre }}</span>
+                    >← {{ item.orig_genre }}</span
+                  >
                 </span>
               </div>
             </div>
@@ -256,7 +294,10 @@
               @click="onDelete(item)"
               :title="t('library.deleteFile')"
             >
-              <span v-if="deleting[item.id] === true" class="loading loading-spinner loading-xs" />
+              <span
+                v-if="deleting[item.id] === true"
+                class="loading loading-spinner loading-xs"
+              />
               <Icon v-else icon="clarity:trash-line" class="h-4 w-4" />
             </button>
           </li>
@@ -299,7 +340,10 @@
         </nav>
 
         <!-- Count footer -->
-        <p v-if="total > 0" class="mt-6 text-xs text-base-content/40 text-center">
+        <p
+          v-if="total > 0"
+          class="mt-6 text-xs text-base-content/40 text-center"
+        >
           {{
             total === 1
               ? t('library.countOne', { count: total })
@@ -319,7 +363,10 @@ import Settings from '/src/components/Settings.vue'
 import AuditModal from '/src/components/AuditModal.vue'
 import API from '/src/model/api'
 import { useI18n } from '/src/i18n'
-import { activeDownloadCount, activeOrganizerCount } from '/src/model/downloadStore'
+import {
+  activeDownloadCount,
+  activeOrganizerCount,
+} from '/src/model/downloadStore'
 
 const PAGE_SIZE = 20
 const { t } = useI18n()
@@ -337,11 +384,23 @@ const deleting = ref({})
 
 // ── Section 1: Active Downloads ──────────────────────────────────────────────
 const activeDownloads = ref([])
-watch(activeDownloads, (v) => { activeDownloadCount.value = v.length }, { immediate: true })
+watch(
+  activeDownloads,
+  (v) => {
+    activeDownloadCount.value = v.length
+  },
+  { immediate: true }
+)
 
 // ── Section 2: Organizer pipeline ────────────────────────────────────────────
 const organizingJobs = ref([])
-watch(organizingJobs, (v) => { activeOrganizerCount.value = v.length }, { immediate: true })
+watch(
+  organizingJobs,
+  (v) => {
+    activeOrganizerCount.value = v.length
+  },
+  { immediate: true }
+)
 
 // ── Audit modal ───────────────────────────────────────────────────────────────
 const auditModal = ref(false)
@@ -416,9 +475,13 @@ function handleWsMessage(event) {
     }
 
     // Move from downloading → organizing (remove from section 1)
-    organizingJobs.value = organizingJobs.value.filter((j) => j.track_id !== songId)
+    organizingJobs.value = organizingJobs.value.filter(
+      (j) => j.track_id !== songId
+    )
   } else if (status === 'done' || status === 'error') {
-    activeDownloads.value = activeDownloads.value.filter((j) => j.song_id !== songId)
+    activeDownloads.value = activeDownloads.value.filter(
+      (j) => j.song_id !== songId
+    )
     if (status === 'done') {
       // Organizer will pick it up; refresh will happen on organizer_done
       // But also refresh now for non-organized downloads
@@ -462,7 +525,11 @@ async function loadTruth() {
   loading.value = true
   error.value = ''
   try {
-    const res = await API.listTruth(searchInput.value, currentPage.value, PAGE_SIZE)
+    const res = await API.listTruth(
+      searchInput.value,
+      currentPage.value,
+      PAGE_SIZE
+    )
     items.value = res.data.items || []
     total.value = res.data.total || 0
     totalPages.value = res.data.pages || 1
