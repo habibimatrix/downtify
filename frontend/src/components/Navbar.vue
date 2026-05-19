@@ -10,10 +10,10 @@
       >
         <img
           src="../assets/downtify.svg"
-          class="h-8 w-8 drop-shadow-[0_0_8px_rgba(26,208,92,0.55)]"
+          class="h-8 w-8 drop-shadow-[0_0_8px_rgba(229,160,13,0.55)]"
         />
         <span class="hidden sm:inline text-lg font-bold tracking-tight">
-          Downtify
+          Downtiplx
         </span>
       </button>
 
@@ -22,23 +22,22 @@
       </div>
 
       <div class="ml-auto flex items-center gap-1 sm:gap-2">
-        <button
-          class="icon-btn"
-          :class="{ 'icon-btn-active': route.name === 'List' }"
-          @click="router.push({ name: 'List' })"
-          :title="t('nav.library')"
-        >
-          <Icon icon="clarity:library-line" class="h-5 w-5" />
-        </button>
-
-        <button
-          class="icon-btn"
-          :class="{ 'icon-btn-active': route.name === 'Player' }"
-          @click="router.push({ name: 'Player' })"
-          :title="t('nav.player')"
-        >
-          <Icon icon="clarity:headphones-line" class="h-5 w-5" />
-        </button>
+        <div class="relative">
+          <button
+            class="icon-btn"
+            :class="{ 'icon-btn-active': route.name === 'List' }"
+            @click="router.push({ name: 'List' })"
+            :title="t('nav.library')"
+          >
+            <Icon icon="clarity:library-line" class="h-5 w-5" />
+          </button>
+          <span
+            v-if="processingCount > 0"
+            class="pointer-events-none absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-content text-[9px] font-bold flex items-center justify-center shadow-glow-sm"
+          >
+            {{ processingCount > 9 ? '9+' : processingCount }}
+          </span>
+        </div>
 
         <button
           class="icon-btn"
@@ -50,25 +49,12 @@
         </button>
 
         <button
-          class="icon-btn relative"
-          :class="{ 'icon-btn-active': route.name === 'Download' }"
-          @click="
-            route.name === 'Download'
-              ? router.push({
-                  name: 'Search',
-                  params: { query: sm.searchTerm.value || ' ' },
-                })
-              : router.push({ name: 'Download' })
-          "
-          :title="t('nav.queue')"
+          class="icon-btn"
+          :class="{ 'icon-btn-active': route.name === 'Organizer' }"
+          @click="router.push({ name: 'Organizer' })"
+          :title="t('nav.organizer')"
         >
-          <Icon icon="clarity:download-line" class="h-5 w-5" />
-          <span
-            v-if="pt.downloadQueue.value.length > 0"
-            class="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-content shadow-glow-sm"
-          >
-            {{ pt.downloadQueue.value.length }}
-          </span>
+          <Icon icon="clarity:organization-line" class="h-5 w-5" />
         </button>
 
         <button
@@ -92,6 +78,15 @@
           <Icon v-else icon="clarity:moon-line" class="h-5 w-5" />
         </button>
 
+        <button
+          v-if="isProtected"
+          class="icon-btn"
+          @click="logout()"
+          :title="t('nav.logout')"
+        >
+          <Icon icon="clarity:logout-line" class="h-5 w-5" />
+        </button>
+
         <label
           for="settings-modal"
           class="icon-btn cursor-pointer"
@@ -111,21 +106,35 @@
 <script setup>
 import { Icon } from '@iconify/vue'
 import { useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
 
 import router from '../router'
 import { useBinaryThemeManager } from '../model/theme'
-import { useProgressTracker } from '../model/download'
-import { useSearchManager } from '../model/search'
 import { useI18n } from '../i18n'
+import API from '../model/api'
+import { processingCount } from '../model/downloadStore'
 
 import SearchInput from './SearchInput.vue'
 
 const route = useRoute()
 const themeMgr = useBinaryThemeManager({
-  newLightAlias: 'downtify-light',
-  newDarkAlias: 'downtify-dark',
+  newLightAlias: 'downtiplx-light',
+  newDarkAlias: 'downtiplx-dark',
 })
-const pt = useProgressTracker()
-const sm = useSearchManager()
 const { t } = useI18n()
+
+const isProtected = ref(false)
+onMounted(async () => {
+  try {
+    const res = await API.authStatus()
+    isProtected.value = res.data.protected === true
+  } catch {}
+})
+
+async function logout() {
+  try {
+    await API.authLogout()
+  } catch {}
+  window.location.href = '/login'
+}
 </script>

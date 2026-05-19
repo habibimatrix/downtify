@@ -35,7 +35,7 @@ from uvicorn import Config, Server
 from downtify import __version__, api
 from downtify.downloader import Downloader
 from downtify.monitor import PlaylistMonitorDB, monitor_loop
-from downtify.organizer_service import start_organizer, stop_organizer
+from downtify.organizer_service import start_organizer
 
 load_dotenv()
 
@@ -49,7 +49,10 @@ class _InterceptHandler(logging.Handler):
             level: str | int = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
-        frame, depth = sys._getframe(6), 6
+        try:
+            frame, depth = sys._getframe(6), 6
+        except ValueError:
+            frame, depth = sys._getframe(0), 0
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back  # type: ignore[assignment]
             depth += 1
@@ -81,7 +84,7 @@ def _setup_logging(level: str) -> None:
         _log.propagate = False
 
 
-DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_DIR', '/downloads'))
+DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_DIR', '/data/tempdownload'))
 DATABASE_DIR = Path('/data')
 WEB_GUI_LOCATION = os.getenv('WEB_GUI_LOCATION', '/downtify/frontend/dist')
 DEFAULT_HOST = os.getenv('HOST', '0.0.0.0')
@@ -185,7 +188,7 @@ def build_app() -> FastAPI:
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(
-        title='Downtify',
+        title='Downtiplx',
         description=(
             'Download your Spotify playlists and songs along with album '
             'art and metadata in a self-hosted way via Docker.'
@@ -203,6 +206,12 @@ def build_app() -> FastAPI:
     settings_path = DATABASE_DIR / 'settings.json'
     api.state.settings_path = settings_path
     api.state.settings = api._load_settings(settings_path)
+
+    # SoundCloud: gespeicherte ID aus Settings aktivieren (Env-Var als Fallback)
+    _sc_saved = api.state.settings.get('soundcloud_client_id', '')
+    if _sc_saved:
+        from downtify.soundcloud import set_client_id as _sc_set
+        _sc_set(_sc_saved)
 
     api.state.version = __version__
     api.state.downloader = Downloader(
@@ -237,15 +246,29 @@ def build_app() -> FastAPI:
                 settings=api.state.settings,
             )
         )
-        
+
         # Organizer-Service starten (Auto-Organisation + Scanner-Ordner)
         start_organizer()
-        
-    @app.on_event('shutdown')
-    async def _shutdown() -> None:
-        stop_organizer()
 
-    @app.get('/list')
+        # Set organizer broadcast callback (thread-safe)
+        import asyncio as _asyncio
+
+        from downtify.organizer_service import (
+            set_broadcast_callback as _set_bc,
+        )
+        _loop = loop
+
+        def _org_broadcast(msg: dict) -> None:
+            try:
+                _asyncio.run_coroutine_threadsafe(
+                    api.state.connections.broadcast(msg), _loop
+                )
+            except Exception:
+                pass
+        _set_bc(_org_broadcast)
+        api.state.organizer_jobs: dict = {}
+
+    @app.get('/api/files')
     def list_downloads() -> list[str]:
         audio_exts = {'.mp3', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}
         base = DOWNLOAD_DIR.resolve()
@@ -263,7 +286,7 @@ def build_app() -> FastAPI:
         files.sort()
         return files
 
-    @app.delete('/delete')
+    @app.delete('/api/files/delete')
     def delete_download(file: str) -> dict:
         # Resolve and confine to DOWNLOAD_DIR to prevent path traversal.
         base = DOWNLOAD_DIR.resolve()
@@ -280,7 +303,7 @@ def build_app() -> FastAPI:
             return {'deleted': False, 'error': str(exc)}
         return {'deleted': True}
 
-    @app.get('/cover')
+    @app.get('/api/cover')
     def get_cover(file: str):
         # Resolve and confine to DOWNLOAD_DIR to prevent path traversal.
         base = DOWNLOAD_DIR.resolve()

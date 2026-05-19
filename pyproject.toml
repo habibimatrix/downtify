@@ -14,6 +14,9 @@ dependencies = [
     "websockets>=12.0",
     "yt-dlp>=2026.2.4",
     "ytmusicapi>=1.10",
+    "shazamio>=0.7.0",
+    "pyacoustid>=1.3.0",
+    "discogs-client>=2.3.0",
 ]
 
 [dependency-groups]
@@ -41,7 +44,7 @@ preview = true
 quote-style = 'single'
 
 [tool.ruff.lint.per-file-ignores]
-"main.py" = ["E501", "PLR0915", "PLR2004", "PLR1702", "PLR0912", "PLR0911"]
+"main.py" = ["E501", "PLR0915", "PLR2004", "PLR1702", "PLR0912", "PLR0911", "PLC0415"]
 "downloader.py" = ["PLC1901"]
-"downtify/*.py" = ["E501", "PLR0913", "PLR0917", "PLR2004", "PLW0603", "PLR0911", "PLR0915", "PLR0912", "PLR0916"]
+"downtify/*.py" = ["E501", "PLR0913", "PLR0917", "PLR2004", "PLW0603", "PLR0911", "PLR0915", "PLR0912", "PLR0916", "PLC0415", "PLR0904", "PLR6301", "PLR6201", "PLR0914"]
 "tests/*.py" = ["PLR2004", "PLC2701", "E501"]

@@ -6,9 +6,9 @@
       <div class="flex items-center gap-2">
         <img
           src="../assets/downtify.svg"
-          class="h-8 w-8 drop-shadow-[0_0_8px_rgba(26,208,92,0.55)]"
+          class="h-8 w-8 drop-shadow-[0_0_8px_rgba(229,160,13,0.55)]"
         />
-        <span class="text-lg font-bold tracking-tight">Downtify</span>
+        <span class="text-lg font-bold tracking-tight">Downtiplx</span>
       </div>
       <div class="ml-auto flex items-center gap-1 sm:gap-2">
         <button
@@ -21,32 +21,10 @@
 
         <button
           class="icon-btn"
-          @click="router.push({ name: 'Player' })"
-          :title="t('nav.player')"
-        >
-          <Icon icon="clarity:headphones-line" class="h-5 w-5" />
-        </button>
-
-        <button
-          class="icon-btn"
           @click="router.push({ name: 'Monitor' })"
           :title="t('nav.monitor')"
         >
           <Icon icon="clarity:eye-line" class="h-5 w-5" />
-        </button>
-
-        <button
-          class="icon-btn relative"
-          @click="router.push({ name: 'Download' })"
-          :title="t('nav.queue')"
-        >
-          <Icon icon="clarity:download-line" class="h-5 w-5" />
-          <span
-            v-if="pt.downloadQueue.value.length > 0"
-            class="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-content shadow-glow-sm"
-          >
-            {{ pt.downloadQueue.value.length }}
-          </span>
         </button>
 
         <button
@@ -85,13 +63,11 @@
 import { Icon } from '@iconify/vue'
 import router from '../router'
 import { useBinaryThemeManager } from '../model/theme'
-import { useProgressTracker } from '../model/download'
 import { useI18n } from '../i18n'
 
 const themeMgr = useBinaryThemeManager({
-  newLightAlias: 'downtify-light',
-  newDarkAlias: 'downtify-dark',
+  newLightAlias: 'downtiplx-light',
+  newDarkAlias: 'downtiplx-dark',
 })
-const pt = useProgressTracker()
 const { t } = useI18n()
 </script>

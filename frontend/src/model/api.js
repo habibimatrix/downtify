@@ -82,15 +82,15 @@ function downloadFileURL(fileName) {
 }
 
 function coverFileURL(fileName) {
-  return `/cover?file=${encodeURIComponent(fileName)}`
+  return `/api/cover?file=${encodeURIComponent(fileName)}`
 }
 
 function listDownloads() {
-  return API.get('/list')
+  return API.get('/api/files')
 }
 
 function deleteDownload(file) {
-  return API.delete('/delete', { params: { file } })
+  return API.delete('/api/files/delete', { params: { file } })
 }
 
 function writePlaylistM3u(payload) {
@@ -118,8 +118,73 @@ function setSettings(settings) {
   })
 }
 
+function listTruth(search = '', page = 1, limit = 20) {
+  return API.get('/api/truth', { params: { search, page, limit } })
+}
+
+function deleteTruth(trackId) {
+  return API.delete(`/api/truth/${trackId}`)
+}
+
+function getOrganizerConfig() {
+  return API.get('/api/organizer/config')
+}
+
+function saveOrganizerConfig(config) {
+  return API.post('/api/organizer/config', config)
+}
+
+function getAudit(trackId) {
+  return API.get(`/api/audit/${encodeURIComponent(trackId)}`)
+}
+
+function getCacheStats() {
+  return API.get('/api/cache/stats')
+}
+
+function listCacheTracks(search = '', limit = 50, offset = 0) {
+  return API.get('/api/cache/tracks', { params: { search, limit, offset } })
+}
+
+function deleteArtistAlbum(artistNorm, album) {
+  return API.delete(
+    `/api/cache/tracks/${encodeURIComponent(artistNorm)}/album`,
+    { data: { album } }
+  )
+}
+
+function deleteCacheTrack(artistNorm) {
+  return API.delete(`/api/cache/tracks/${encodeURIComponent(artistNorm)}`)
+}
+
+function clearAllCache() {
+  return API.delete('/api/cache/tracks')
+}
+
+function discoverSoundcloudClientId() {
+  return API.get('/api/soundcloud/discover')
+}
+
+function authStatus() {
+  return API.get('/api/auth')
+}
+
+function authLogin(password) {
+  return API.post('/api/auth', { password })
+}
+
+function authLogout() {
+  return API.post('/api/auth/logout')
+}
+
+function healthApis() {
+  return API.get('/api/health/apis')
+}
+
 function ws_onmessage(fn) {
-  return (wsConnection.onmessage = fn)
+  const prev = wsConnection.onmessage
+  wsConnection.onmessage = fn
+  return prev
 }
 function ws_onerror(fn) {
   return (wsConnection.onerror = fn)
@@ -140,6 +205,21 @@ export default {
   clearQueue,
   getSettings,
   setSettings,
+  listTruth,
+  deleteTruth,
+  getOrganizerConfig,
+  saveOrganizerConfig,
+  getAudit,
+  getCacheStats,
+  listCacheTracks,
+  deleteArtistAlbum,
+  deleteCacheTrack,
+  clearAllCache,
+  discoverSoundcloudClientId,
+  authStatus,
+  authLogin,
+  authLogout,
+  healthApis,
   check_for_update,
   ws_onmessage,
   ws_onerror,

@@ -20,8 +20,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime as _dt
+import hashlib
+import hmac
 import json
+import os
 import re
+import secrets
 from pathlib import Path
 from typing import Any, Optional
 
@@ -31,6 +36,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -39,6 +45,38 @@ from loguru import logger
 from . import m3u, providers, spotify
 from .downloader import Downloader
 from .monitor import PlaylistMonitorDB, check_playlist
+from .organizer_service import (
+    DEFAULT_COUNTRY_TO_FOLDER,
+    DEFAULT_GENRE_RULES,
+    DEFAULT_SEPARATORS,
+    get_organizer,
+)
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+_AUTH_PASSWORD = os.getenv('DOWNTIFY_PASSWORD', '')
+_SESSION_SECRET = secrets.token_hex(32)
+_SESSION_COOKIE = 'downtiplx_session'
+_SESSION_MAX_AGE = 30 * 24 * 3600  # 30 days
+
+
+def _make_token() -> str:
+    return hmac.new(_SESSION_SECRET.encode(), _AUTH_PASSWORD.encode(), hashlib.sha256).hexdigest()
+
+
+def _token_valid(token: str) -> bool:
+    if not _AUTH_PASSWORD:
+        return True
+    return hmac.compare_digest(token, _make_token())
+
+
+def _is_authenticated(request: Request) -> bool:
+    if not _AUTH_PASSWORD:
+        return True
+    return _token_valid(request.cookies.get(_SESSION_COOKIE, ''))
+
+
+# ── Settings ───────────────────────────────────────────────────────────────────
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     'audio_providers': ['youtube-music'],
@@ -50,6 +88,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     'generate_m3u': True,
     'max_parallel_downloads': 3,
     'organize_by_artist': False,
+    'genre_rules': None,        # None = use hardcoded defaults
+    'artist_rules': [],
+    'artist_genre_rules': [],   # [{pattern, genre}] — highest-priority override
+    'country_to_folder': None,  # None = use hardcoded defaults
 }
 
 
@@ -125,6 +167,14 @@ def _load_settings(path: Path) -> dict[str, Any]:
     except Exception:
         pass
     return dict(DEFAULT_SETTINGS)
+
+
+def _save_settings_full(path: Path, settings: dict[str, Any]) -> None:
+    """Save all settings keys (including organizer config) to disk."""
+    try:
+        path.write_text(json.dumps(settings, indent=2, ensure_ascii=False), encoding='utf-8')
+    except Exception as exc:
+        logger.warning('Could not persist settings: {}', exc)
 
 
 def _save_settings(path: Path, settings: dict[str, Any]) -> None:
@@ -232,6 +282,9 @@ def _song_for_download(url: str) -> dict[str, Any]:
         if not match:
             raise HTTPException(status_code=400, detail='Invalid YouTube URL')
         return providers.song_from_video_id(match.group(1))
+    if 'soundcloud.com/' in url:
+        # yt-dlp handles SoundCloud natively; return a minimal song dict
+        return {'title': url, 'song_id': url, 'name': url, 'source': 'soundcloud', 'url': url}
     raise HTTPException(status_code=400, detail='Unsupported URL')
 
 
@@ -318,6 +371,23 @@ async def _run_download(
         'status': 'done',
         'filename': filename,
     })
+
+    # Track in the List of Truth (monitor DB) for direct downloads
+    if state.monitor_db is not None and filename:
+        spotify_id = song.get('song_id') or song.get('spotify_id') or ''
+        if spotify_id:
+            display_name = (
+                song.get('name')
+                or song.get('title')
+                or ''
+            )
+            await asyncio.to_thread(
+                state.monitor_db.mark_direct_download,
+                spotify_id,
+                filename,
+                display_name or None,
+            )
+
     return filename
 
 
@@ -345,6 +415,19 @@ async def download_endpoint(
         song.get('year'),
         song.get('release_date'),
     )
+
+    # Re-download guard: reject if already in List of Truth
+    spotify_id = song.get('song_id') or song.get('spotify_id') or ''
+    if spotify_id and state.monitor_db is not None:
+        already = await asyncio.to_thread(
+            state.monitor_db.is_track_downloaded, spotify_id
+        )
+        if already:
+            raise HTTPException(
+                status_code=409,
+                detail='already_downloaded',
+            )
+
     song_id = _register_job(song, status='downloading')
 
     try:
@@ -596,6 +679,375 @@ async def update_settings_endpoint(
     if state.settings_path is not None:
         _save_settings(state.settings_path, state.settings)
     return state.settings
+
+
+@router.get('/api/truth')
+def get_truth(
+    search: str = Query(''),
+    page: int = Query(1),
+    limit: int = Query(20),
+) -> dict[str, Any]:
+    """List of Truth: paginated search of all downloaded tracks in monitor DB."""
+    if state.monitor_db is None:
+        return {'items': [], 'total': 0, 'page': page, 'pages': 1}
+    items, total, pages = state.monitor_db.list_all_downloads(
+        search=search, page=page, limit=limit
+    )
+    # Enrich with organizer metadata (genre, artist, album, title, orig_*)
+    svc = get_organizer()
+    if svc is not None:
+        ids = [item['track_spotify_id'] for item in items if item.get('track_spotify_id')]
+        enriched = svc.db.get_processed_by_spotify_ids(ids)
+        for item in items:
+            meta = enriched.get(item.get('track_spotify_id') or '', {})
+            for key in ('genre', 'artist', 'album', 'title', 'orig_genre', 'orig_artist', 'orig_album', 'orig_title'):
+                item[key] = meta.get(key, '')
+    return {'items': items, 'total': total, 'page': page, 'pages': pages}
+
+
+@router.delete('/api/truth/{track_id}')
+def delete_truth(track_id: int) -> dict[str, Any]:
+    """Remove a track from the List of Truth so it can be re-downloaded."""
+    if state.monitor_db is None:
+        raise HTTPException(status_code=503, detail='Monitor DB not ready')
+    spotify_id = state.monitor_db.get_spotify_id_for_download(track_id)
+    deleted = state.monitor_db.delete_download(track_id)
+    # Also clear from organizer processed table so the file can be re-organized
+    if deleted and spotify_id:
+        svc = get_organizer()
+        if svc is not None:
+            svc.db.delete_processed_by_spotify_id(spotify_id)
+    return {'deleted': deleted}
+
+
+@router.get('/api/organizer/config')
+def get_organizer_config() -> dict[str, Any]:
+    """Return current organizer rules (genre rules + artist aliases)."""
+    genre_rules = state.settings.get('genre_rules')
+    if not genre_rules:
+        genre_rules = [
+            {'keyword': kw, 'folder': folder}
+            for kw, folder in DEFAULT_GENRE_RULES
+        ]
+    country_to_folder = state.settings.get('country_to_folder')
+    if not country_to_folder:
+        country_to_folder = DEFAULT_COUNTRY_TO_FOLDER
+    artist_rules = state.settings.get('artist_rules') or []
+    artist_genre_rules = state.settings.get('artist_genre_rules') or []
+    artist_separator_tokens = state.settings.get('artist_separator_tokens') or DEFAULT_SEPARATORS
+    available_folders = sorted(set(
+        r['folder'] for r in genre_rules
+        if isinstance(r, dict) and r.get('folder')
+    ))
+    from .soundcloud import get_client_id as _sc_get_id
+    return {
+        'genre_rules': genre_rules,
+        'artist_rules': artist_rules,
+        'artist_genre_rules': artist_genre_rules,
+        'country_to_folder': country_to_folder,
+        'available_folders': available_folders,
+        'artist_separator_tokens': artist_separator_tokens,
+        'soundcloud_client_id': state.settings.get('soundcloud_client_id') or _sc_get_id(),
+    }
+
+
+@router.post('/api/organizer/config')
+async def save_organizer_config(request: Request) -> dict[str, Any]:
+    """Save organizer rules to settings and hot-reload the organizer."""
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Invalid JSON') from exc
+
+    if isinstance(payload.get('genre_rules'), list):
+        state.settings['genre_rules'] = payload['genre_rules']
+    if isinstance(payload.get('artist_rules'), list):
+        state.settings['artist_rules'] = payload['artist_rules']
+    if isinstance(payload.get('artist_genre_rules'), list):
+        state.settings['artist_genre_rules'] = payload['artist_genre_rules']
+    if isinstance(payload.get('country_to_folder'), dict):
+        state.settings['country_to_folder'] = payload['country_to_folder']
+    if isinstance(payload.get('artist_separator_tokens'), list):
+        state.settings['artist_separator_tokens'] = payload['artist_separator_tokens']
+    if isinstance(payload.get('soundcloud_client_id'), str):
+        cid = payload['soundcloud_client_id'].strip()
+        state.settings['soundcloud_client_id'] = cid
+        from .soundcloud import set_client_id as _sc_set
+        _sc_set(cid)
+
+    if state.settings_path is not None:
+        _save_settings_full(state.settings_path, state.settings)
+
+    # Hot-reload organizer rules + separator tokens
+    svc = get_organizer()
+    if svc is not None:
+        svc.resolver.reload_from_settings(state.settings)
+        svc.voter.separators = state.settings.get('artist_separator_tokens') or DEFAULT_SEPARATORS
+
+    return {'saved': True}
+
+
+@router.get('/api/soundcloud/discover')
+async def soundcloud_discover_client_id() -> dict[str, Any]:
+    """Scrapt soundcloud.com und gibt die eingebettete client_id zurück."""
+    import asyncio
+
+    from .soundcloud import discover_client_id
+    from .soundcloud import set_client_id as _sc_set
+    loop = asyncio.get_event_loop()
+    cid = await loop.run_in_executor(None, discover_client_id)
+    if not cid:
+        raise HTTPException(status_code=404, detail='client_id nicht gefunden')
+    # Direkt aktivieren + in Settings persistieren
+    _sc_set(cid)
+    state.settings['soundcloud_client_id'] = cid
+    if state.settings_path is not None:
+        _save_settings_full(state.settings_path, state.settings)
+    return {'client_id': cid}
+
+
+@router.get('/api/organizer/status')
+def organizer_status() -> dict:
+    """Returns currently active organizer jobs."""
+    return {"jobs": list(getattr(state, 'organizer_jobs', {}).values())}
+
+
+@router.get('/api/health/apis')
+def health_check_apis() -> dict:
+    import shutil
+    import urllib.request
+    results: dict[str, dict] = {}
+    log_lines: list[str] = []
+    ts = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    def _http_ok(url: str, headers: Optional[dict] = None, timeout: int = 8) -> tuple[bool, str]:
+        try:
+            req = urllib.request.Request(url, headers=headers or {})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                ok = r.status < 500
+                return ok, f'HTTP {r.status}'
+        except Exception as exc:
+            return False, str(exc)[:120]
+
+    # YouTube Music
+    try:
+        from downtify import providers
+        providers.search_songs('test', limit=1)
+        results['youtube_music'] = {'status': 'ok', 'detail': 'ytmusicapi reachable'}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['youtube_music'] = {'status': 'error', 'detail': msg}
+        log_lines.append(f'[{ts}] youtube_music: {msg}')
+
+    # Spotify (public embed, no key needed)
+    try:
+        from downtify import spotify
+        spotify.track_from_id('4iV5W9uYEdYUVa79Axb7Rh')  # known public track ID
+        results['spotify'] = {'status': 'ok', 'detail': 'Spotify embed reachable'}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['spotify'] = {'status': 'error', 'detail': msg}
+        log_lines.append(f'[{ts}] spotify: {msg}')
+
+    # Deezer
+    ok, detail = _http_ok('https://api.deezer.com/search?q=test&limit=1')
+    results['deezer'] = {'status': 'ok' if ok else 'error', 'detail': detail}
+    if not ok:
+        log_lines.append(f'[{ts}] deezer: {detail}')
+
+    # Last.fm
+    ok, detail = _http_ok('https://ws.audioscrobbler.com/2.0/?method=track.search&track=test&api_key=nokey&format=json&limit=1')
+    results['lastfm'] = {'status': 'ok' if ok else 'error', 'detail': detail}
+    if not ok:
+        log_lines.append(f'[{ts}] lastfm: {detail}')
+
+    # MusicBrainz
+    ok, detail = _http_ok(
+        'https://musicbrainz.org/ws/2/recording?query=test&limit=1&fmt=json',
+        headers={'User-Agent': 'Downtiplx/2.7.0'},
+        timeout=10,
+    )
+    results['musicbrainz'] = {'status': 'ok' if ok else 'error', 'detail': detail}
+    if not ok:
+        log_lines.append(f'[{ts}] musicbrainz: {detail}')
+
+    # SoundCloud
+    try:
+        from downtify.soundcloud import get_client_id
+        cid = get_client_id()
+        if not cid:
+            results['soundcloud'] = {'status': 'warning', 'detail': 'No client_id configured — use Auto-detect in Settings'}
+        else:
+            ok, detail = _http_ok(
+                f'https://api.soundcloud.com/tracks?q=test&client_id={cid}&limit=1',
+                timeout=8,
+            )
+            if not ok and '401' in detail:
+                results['soundcloud'] = {'status': 'error', 'detail': 'client_id invalid (401) — re-run Auto-detect'}
+                log_lines.append(f'[{ts}] soundcloud: client_id 401')
+            else:
+                results['soundcloud'] = {'status': 'ok' if ok else 'warning', 'detail': detail}
+    except Exception as e:
+        msg = str(e)[:120]
+        results['soundcloud'] = {'status': 'error', 'detail': msg}
+        log_lines.append(f'[{ts}] soundcloud: {msg}')
+
+    # Shazam
+    try:
+        import shazamio  # noqa: F401
+        results['shazam'] = {'status': 'ok', 'detail': 'shazamio installed'}
+    except ImportError as e:
+        msg = str(e)[:120]
+        results['shazam'] = {'status': 'error', 'detail': f'Import failed: {msg}'}
+        log_lines.append(f'[{ts}] shazam: {msg}')
+
+    # AcoustID (fpcalc fingerprinter)
+    try:
+        fpcalc = shutil.which('fpcalc')
+        if fpcalc:
+            results['acoustid'] = {'status': 'ok', 'detail': f'fpcalc found at {fpcalc}'}
+        else:
+            results['acoustid'] = {'status': 'warning', 'detail': 'fpcalc not in PATH — fingerprinting disabled'}
+    except Exception as e:
+        results['acoustid'] = {'status': 'error', 'detail': str(e)[:120]}
+
+    # yt-dlp
+    try:
+        import yt_dlp  # noqa: F401
+        results['yt_dlp'] = {'status': 'ok', 'detail': f'v{yt_dlp.version.__version__}'}
+    except ImportError as e:
+        msg = str(e)[:120]
+        results['yt_dlp'] = {'status': 'error', 'detail': msg}
+        log_lines.append(f'[{ts}] yt_dlp: {msg}')
+
+    # Write error log
+    if log_lines:
+        try:
+            log_path = Path('/data/API Fehler.log')
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write('\n'.join(log_lines) + '\n')
+        except Exception:
+            pass
+
+    return {'apis': results, 'checked_at': ts}
+
+
+# ── Cache API ─────────────────────────────────────────────────────────────────
+
+@router.get('/api/cache/stats')
+def get_cache_stats() -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        return {'count': 0}
+    count = svc.db.count_artist_knowledge()
+    return {'count': count}
+
+
+@router.get('/api/cache/tracks')
+def list_cache_tracks(
+    search: str = Query(''),
+    limit: int = Query(50),
+    offset: int = Query(0),
+) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        return {'items': [], 'total': 0}
+    items = svc.db.list_artist_knowledge(search=search, limit=limit, offset=offset)
+    total = svc.db.count_artist_knowledge(search=search)
+    return {'items': items, 'total': total}
+
+
+@router.delete('/api/cache/tracks')
+def delete_all_cache() -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    svc.db.clear_artist_knowledge()
+    return {'deleted': True}
+
+
+@router.delete('/api/cache/tracks/{artist_norm}/album')
+async def delete_artist_album(artist_norm: str, request: Request) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Invalid JSON') from exc
+    album = payload.get('album', '')
+    if not album:
+        raise HTTPException(status_code=400, detail='album required')
+    svc.db.remove_artist_album(artist_norm, album)
+    return {'deleted': True}
+
+
+@router.delete('/api/cache/tracks/{artist_norm}')
+def delete_cache_track(artist_norm: str) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    svc.db.delete_artist_knowledge(artist_norm)
+    return {'deleted': True}
+
+
+# ── Auth API ──────────────────────────────────────────────────────────────────
+
+@router.get('/api/auth')
+def auth_status(request: Request) -> dict[str, Any]:
+    return {
+        'protected': bool(_AUTH_PASSWORD),
+        'authenticated': _is_authenticated(request),
+    }
+
+
+@router.post('/api/auth')
+async def auth_login(request: Request, response: Response) -> dict[str, Any]:
+    if not _AUTH_PASSWORD:
+        return {'ok': True}
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid JSON')
+    if body.get('password', '') != _AUTH_PASSWORD:
+        raise HTTPException(status_code=401, detail='Wrong password')
+    response.set_cookie(
+        _SESSION_COOKIE,
+        _make_token(),
+        httponly=True,
+        samesite='strict',
+        max_age=_SESSION_MAX_AGE,
+    )
+    return {'ok': True}
+
+
+@router.post('/api/auth/logout')
+def auth_logout(response: Response) -> dict[str, Any]:
+    response.delete_cookie(_SESSION_COOKIE)
+    return {'ok': True}
+
+
+# ── Audit API ─────────────────────────────────────────────────────────────────
+
+@router.get('/api/audit/{track_id}')
+def get_audit(track_id: str) -> dict[str, Any]:
+    svc = get_organizer()
+    if svc is None:
+        raise HTTPException(status_code=503, detail='Organizer not running')
+    audit = svc.db.get_audit(track_id)
+    if audit is None and state.monitor_db is not None:
+        # For YouTube-sourced downloads the organizer saves the audit under
+        # "scanner:<stem>" because the file has no embedded Spotify ID tag.
+        # Fall back: look up the filename from monitor.db by track_spotify_id.
+        from pathlib import Path as _Path
+        filename = state.monitor_db.get_filename_for_spotify_id(track_id)
+        if filename:
+            stem = _Path(filename).stem
+            audit = svc.db.get_audit(f'scanner:{stem}')
+    if audit is None:
+        raise HTTPException(status_code=404, detail='No audit found')
+    return audit
 
 
 @router.websocket('/api/ws')

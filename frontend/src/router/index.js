@@ -1,13 +1,20 @@
 import { createWebHistory, createRouter } from 'vue-router'
 import Home from '/src/views/Front.vue'
 import Search from '/src/views/Search.vue'
-import Download from '/src/views/Download.vue'
 import List from '/src/views/Downloads.vue'
 import Monitor from '/src/views/Monitor.vue'
-import Player from '/src/views/Player.vue'
+import Organizer from '/src/views/Organizer.vue'
+import Login from '/src/views/Login.vue'
+import API from '/src/model/api'
 import config from '/src/config'
 
 const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { public: true },
+  },
   {
     path: '/',
     name: 'Home',
@@ -17,11 +24,6 @@ const routes = [
     path: '/search/:query',
     name: 'Search',
     component: Search,
-  },
-  {
-    path: '/download',
-    name: 'Download',
-    component: Download,
   },
   {
     path: '/list',
@@ -34,15 +36,29 @@ const routes = [
     component: Monitor,
   },
   {
-    path: '/player',
-    name: 'Player',
-    component: Player,
+    path: '/organizer',
+    name: 'Organizer',
+    component: Organizer,
   },
 ]
 
 const router = createRouter({
   history: createWebHistory(config.BASEURL),
   routes,
+})
+
+router.beforeEach(async (to) => {
+  if (to.meta.public) return true
+  try {
+    const res = await API.authStatus()
+    const { protected: isProtected, authenticated } = res.data
+    if (isProtected && !authenticated) {
+      return { name: 'Login', query: { redirect: to.fullPath } }
+    }
+  } catch {
+    // backend not reachable yet — allow through
+  }
+  return true
 })
 
 export default router

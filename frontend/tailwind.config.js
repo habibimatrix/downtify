@@ -4,17 +4,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        downtify: {
-          50: '#e6fbf0',
-          100: '#c5f4d8',
-          200: '#88e9b1',
-          300: '#48dd87',
-          400: '#1ad05c',
-          500: '#15b150',
-          600: '#10913f',
-          700: '#0d6f31',
-          800: '#0a4d22',
-          900: '#062c14',
+        downtiplx: {
+          50: '#fef9ec',
+          100: '#fdeec4',
+          200: '#fbd97b',
+          300: '#f8c130',
+          400: '#E5A00D',
+          500: '#CC7B19',
+          600: '#a55a10',
+          700: '#7c3f0c',
+          800: '#512808',
+          900: '#2a1404',
         },
       },
       fontFamily: {
@@ -31,9 +31,9 @@ module.exports = {
         ],
       },
       boxShadow: {
-        'glow-sm': '0 0 24px rgba(26, 208, 92, 0.18)',
-        glow: '0 0 36px rgba(26, 208, 92, 0.30)',
-        'glow-lg': '0 0 60px rgba(26, 208, 92, 0.45)',
+        'glow-sm': '0 0 24px rgba(229, 160, 13, 0.18)',
+        glow: '0 0 36px rgba(229, 160, 13, 0.30)',
+        'glow-lg': '0 0 60px rgba(229, 160, 13, 0.45)',
       },
       animation: {
         'fade-in': 'fadeIn 0.35s ease-out',
@@ -66,14 +66,14 @@ module.exports = {
   daisyui: {
     themes: [
       {
-        'downtify-dark': {
-          primary: '#1AD05C',
-          'primary-focus': '#15b150',
-          'primary-content': '#001b0a',
+        'downtiplx-dark': {
+          primary: '#E5A00D',
+          'primary-focus': '#CC7B19',
+          'primary-content': '#1a0e00',
           secondary: '#9ca3af',
           'secondary-content': '#0a0a0a',
-          accent: '#1AD05C',
-          'accent-content': '#001b0a',
+          accent: '#E5A00D',
+          'accent-content': '#1a0e00',
           neutral: '#121212',
           'neutral-content': '#e5e7eb',
           'base-100': '#181818',
@@ -81,7 +81,7 @@ module.exports = {
           'base-300': '#000000',
           'base-content': '#f4f4f5',
           info: '#3ABFF8',
-          success: '#1AD05C',
+          success: '#22c55e',
           warning: '#FBBD23',
           error: '#F87272',
           '--rounded-box': '1.25rem',
@@ -95,14 +95,14 @@ module.exports = {
         },
       },
       {
-        'downtify-light': {
-          primary: '#1AD05C',
-          'primary-focus': '#15b150',
+        'downtiplx-light': {
+          primary: '#CC7B19',
+          'primary-focus': '#a55a10',
           'primary-content': '#ffffff',
           secondary: '#5d5d5d',
           'secondary-content': '#ffffff',
-          accent: '#16ce57',
-          'accent-content': '#ffffff',
+          accent: '#E5A00D',
+          'accent-content': '#1a0e00',
           neutral: '#1f1f1f',
           'neutral-content': '#f4f4f5',
           'base-100': '#ffffff',
@@ -110,7 +110,7 @@ module.exports = {
           'base-300': '#eaecef',
           'base-content': '#0f172a',
           info: '#3ABFF8',
-          success: '#1AD05C',
+          success: '#22c55e',
           warning: '#FBBD23',
           error: '#F87272',
           '--rounded-box': '1.25rem',
@@ -124,7 +124,7 @@ module.exports = {
         },
       },
     ],
-    darkTheme: 'downtify-dark',
+    darkTheme: 'downtiplx-dark',
   },
   plugins: [require('daisyui')],
 }
