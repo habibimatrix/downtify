@@ -524,7 +524,13 @@ watch(searchInput, () => {
   }, 300)
 })
 
-async function loadTruth() {
+let _loadTruthTimer = null
+function loadTruth() {
+  clearTimeout(_loadTruthTimer)
+  _loadTruthTimer = setTimeout(_fetchTruth, 150)
+}
+
+async function _fetchTruth() {
   loading.value = true
   error.value = ''
   try {
