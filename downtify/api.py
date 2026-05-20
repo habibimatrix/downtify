@@ -466,7 +466,20 @@ async def _process_batch(
             filename = await _run_download(
                 song, song_id, subdir=playlist_subdir
             )
-        except Exception:
+        except Exception as exc:
+            logger.exception('Batch download failed for song_id={}', song_id)
+            # _run_download broadcasts errors itself, but early failures (e.g.
+            # "Downloader not ready") raise before the broadcast — cover them.
+            job = state.download_jobs.get(song_id)
+            if job and job.get('status') != 'error':
+                job['status'] = 'error'
+                job['message'] = f'Error: {exc}'
+                await state.connections.broadcast({
+                    'song': song,
+                    'progress': 0,
+                    'message': f'Error: {exc}',
+                    'status': 'error',
+                })
             filename = None
         return {'song': song, 'filename': filename}
 

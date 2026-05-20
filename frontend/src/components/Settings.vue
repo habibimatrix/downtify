@@ -567,6 +567,12 @@ async function loadCookiesStatus() {
 async function onCookiesFileChange(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  if (file.size === 0) {
+    cookiesError.value = true
+    cookiesMsg.value = t('cookies.emptyFile')
+    event.target.value = ''
+    return
+  }
   cookiesUploading.value = true
   cookiesMsg.value = ''
   cookiesError.value = false

@@ -244,10 +244,8 @@ def build_app() -> FastAPI:
             )
         )
 
-        # Organizer-Service starten (Auto-Organisation + Scanner-Ordner)
-        start_organizer()
-
-        # Set organizer broadcast callback (thread-safe)
+        # Set organizer broadcast callback BEFORE starting the service
+        # so no events are lost when the threads begin processing.
         import asyncio as _asyncio
 
         from downtify.organizer_service import (
@@ -263,6 +261,9 @@ def build_app() -> FastAPI:
             except Exception:
                 pass
         _set_bc(_org_broadcast)
+
+        # Organizer-Service starten (Auto-Organisation + Scanner-Ordner)
+        start_organizer()
         api.state.organizer_jobs: dict = {}
 
     @app.get('/api/files')

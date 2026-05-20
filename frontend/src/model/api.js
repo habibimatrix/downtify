@@ -16,15 +16,35 @@ console.log('session ID: ', sessionID)
 
 getVersion()
 
-const wsConnection = new WebSocket(
-  `${config.WS_PROTOCOL}//${config.BACKEND}${
+let _ws = null
+let _onmessage = null
+let _onerror = null
+let _reconnectDelay = 1000
+
+function _buildWsUrl() {
+  return `${config.WS_PROTOCOL}//${config.BACKEND}${
     config.PORT !== '' ? ':' + config.PORT : ''
   }${config.BASEURL}/api/ws?client_id=${sessionID}`
-)
-
-wsConnection.onopen = (event) => {
-  console.log('websocket connection opened', event)
 }
+
+function _connect() {
+  _ws = new WebSocket(_buildWsUrl())
+  _ws.onopen = () => {
+    console.log('websocket connection opened')
+    _reconnectDelay = 1000
+  }
+  _ws.onclose = () => {
+    console.log(`websocket closed, reconnecting in ${_reconnectDelay}ms`)
+    setTimeout(() => {
+      _reconnectDelay = Math.min(_reconnectDelay * 2, 30000)
+      _connect()
+    }, _reconnectDelay)
+  }
+  if (_onmessage) _ws.onmessage = _onmessage
+  if (_onerror) _ws.onerror = _onerror
+}
+
+_connect()
 
 function getVersion() {
   API.get('/api/version')
@@ -202,12 +222,15 @@ function healthApis() {
 }
 
 function ws_onmessage(fn) {
-  const prev = wsConnection.onmessage
-  wsConnection.onmessage = fn
+  const prev = _onmessage
+  _onmessage = fn
+  if (_ws) _ws.onmessage = fn
   return prev
 }
 function ws_onerror(fn) {
-  return (wsConnection.onerror = fn)
+  _onerror = fn
+  if (_ws) _ws.onerror = fn
+  return fn
 }
 
 export default {

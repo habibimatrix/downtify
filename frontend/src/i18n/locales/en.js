@@ -317,6 +317,7 @@ export default {
     delete: 'Remove cookies',
     uploadSuccess: 'Cookies uploaded. Downloads will use them immediately.',
     uploadError: 'Upload failed. Make sure the file is a valid cookies.txt.',
+    emptyFile: 'The selected file is empty. Export your cookies again.',
     deleteSuccess: 'Cookies removed.',
     deleteError: 'Could not remove cookies.',
   },
