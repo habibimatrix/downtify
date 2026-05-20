@@ -4,7 +4,8 @@ WORKDIR /build
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir --root-user-action ignore -r requirements.txt
+RUN pip install --no-cache-dir --root-user-action ignore -r requirements.txt && \
+    pip install --no-cache-dir --root-user-action ignore --upgrade yt-dlp
 
 FROM python:3.13-slim
 
