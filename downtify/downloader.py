@@ -306,7 +306,14 @@ class Downloader:
             if default_cookies.exists():
                 cookies_file = str(default_cookies)
         if cookies_file:
+            p = Path(cookies_file)
+            size = p.stat().st_size if p.exists() else -1
+            logger.info('yt-dlp: using cookies file {} ({} bytes)', cookies_file, size)
+            if size == 0:
+                logger.warning('yt-dlp: cookies file is EMPTY — bot detection will NOT be bypassed')
             ydl_opts['cookiefile'] = cookies_file
+        else:
+            logger.info('yt-dlp: no cookies file — downloads may fail on blocked IPs')
         cookies_browser = os.getenv(
             'DOWNTIFY_COOKIES_FROM_BROWSER', ''
         ).strip()
