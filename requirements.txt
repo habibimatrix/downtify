@@ -91,6 +91,8 @@ pydub==0.25.1
     # via shazamio
 python-dotenv==1.2.2
     # via load-dotenv
+python-multipart==0.0.20
+    # via fastapi (UploadFile support)
 requests==2.34.2
     # via
     #   discogs-client
