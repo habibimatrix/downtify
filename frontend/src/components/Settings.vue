@@ -238,38 +238,84 @@
             class="input input-sm h-9 w-full font-mono text-xs rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60"
             :placeholder="t('organizer.soundcloudPlaceholder')"
           />
-          <!-- HTML-paste section -->
-          <div class="mt-3">
-            <div class="flex items-center gap-1.5 mb-1.5">
-              <p class="text-[11px] text-base-content/40 flex-1">
-                {{ t('organizer.soundcloudHtmlHint') }}
-              </p>
-            </div>
-            <textarea
-              v-model="scHtmlPaste"
-              rows="3"
-              class="textarea textarea-sm w-full text-xs font-mono rounded-xl bg-base-100/85 border border-white/10 focus:border-primary/60 resize-none"
-              :placeholder="t('organizer.soundcloudHtmlPlaceholder')"
-            />
-            <button
-              class="btn btn-sm h-9 px-3 mt-2 border-white/10 bg-base-100/85 hover:bg-base-100 rounded-xl"
-              :disabled="scDiscovering || !scHtmlPaste.trim()"
-              @click="extractSoundcloudIdFromHtml"
-            >
-              <span
-                v-if="scDiscovering"
-                class="loading loading-spinner loading-xs mr-1"
-              />
-              <Icon v-else icon="clarity:code-line" class="h-4 w-4 mr-1" />
-              {{ t('organizer.soundcloudExtract') }}
-            </button>
-          </div>
+          <button
+            class="btn btn-sm h-9 px-3 mt-2 border-white/10 bg-base-100/85 hover:bg-base-100 rounded-xl"
+            :disabled="scDiscovering"
+            @click="discoverSoundcloudId"
+          >
+            <span v-if="scDiscovering" class="loading loading-spinner loading-xs mr-1" />
+            <Icon v-else icon="clarity:search-line" class="h-4 w-4 mr-1" />
+            {{ t('organizer.soundcloudDiscover') }}
+          </button>
           <p
             v-if="scMsg"
             class="text-xs mt-1.5"
             :class="scError ? 'text-error' : 'text-success'"
           >
             {{ scMsg }}
+          </p>
+          <p class="text-[11px] text-base-content/40 mt-1.5">
+            {{ t('organizer.soundcloudNote') }}
+          </p>
+        </div>
+
+        <!-- YouTube Cookies -->
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2"
+          >
+            {{ t('cookies.title') }}
+          </label>
+          <p class="text-[11px] text-base-content/40 mb-2">
+            {{ t('cookies.hint') }}
+          </p>
+
+          <!-- Status -->
+          <div
+            class="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs mb-2"
+            :class="cookiesPresent
+              ? 'border-success/30 bg-success/5 text-success'
+              : 'border-white/10 bg-base-100/50 text-base-content/40'"
+          >
+            <span
+              class="h-2 w-2 rounded-full shrink-0"
+              :class="cookiesPresent ? 'bg-success' : 'bg-base-content/20'"
+            />
+            <span class="flex-1">
+              {{ cookiesPresent
+                ? t('cookies.statusLoaded', { count: cookiesEntryCount ?? '?' })
+                : t('cookies.statusNone') }}
+            </span>
+            <button
+              v-if="cookiesPresent"
+              class="text-error/70 hover:text-error transition-colors"
+              :title="t('cookies.delete')"
+              @click="removeCookies"
+            >
+              <Icon icon="clarity:trash-line" class="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <!-- Upload -->
+          <label class="btn btn-sm h-9 px-3 border-white/10 bg-base-100/85 hover:bg-base-100 rounded-xl cursor-pointer">
+            <span v-if="cookiesUploading" class="loading loading-spinner loading-xs mr-1" />
+            <Icon v-else icon="clarity:upload-line" class="h-4 w-4 mr-1" />
+            {{ t('cookies.upload') }}
+            <input
+              type="file"
+              accept=".txt,text/plain"
+              class="hidden"
+              :disabled="cookiesUploading"
+              @change="onCookiesFileChange"
+            />
+          </label>
+
+          <p
+            v-if="cookiesMsg"
+            class="text-xs mt-1.5"
+            :class="cookiesError ? 'text-error' : 'text-success'"
+          >
+            {{ cookiesMsg }}
           </p>
         </div>
 
@@ -464,7 +510,6 @@ async function testApis() {
 }
 
 const soundcloudClientId = ref('')
-const scHtmlPaste = ref('')
 const scDiscovering = ref(false)
 const scMsg = ref('')
 const scError = ref(false)
@@ -476,15 +521,13 @@ async function loadSoundcloudId() {
   } catch {}
 }
 
-async function extractSoundcloudIdFromHtml() {
-  if (!scHtmlPaste.value.trim()) return
+async function discoverSoundcloudId() {
   scDiscovering.value = true
   scMsg.value = ''
   scError.value = false
   try {
-    const res = await API.extractSoundcloudClientId(scHtmlPaste.value)
+    const res = await API.discoverSoundcloudClientId()
     soundcloudClientId.value = res.data.client_id
-    scHtmlPaste.value = ''
     scMsg.value = t('organizer.soundcloudFound')
   } catch {
     scError.value = true
@@ -505,7 +548,57 @@ watch(soundcloudClientId, (val) => {
   }, 600)
 })
 
+const cookiesPresent = ref(false)
+const cookiesEntryCount = ref(null)
+const cookiesUploading = ref(false)
+const cookiesMsg = ref('')
+const cookiesError = ref(false)
+
+async function loadCookiesStatus() {
+  try {
+    const res = await API.getCookiesStatus()
+    cookiesPresent.value = res.data.present || false
+    cookiesEntryCount.value = res.data.entry_count ?? null
+  } catch {
+    cookiesPresent.value = false
+  }
+}
+
+async function onCookiesFileChange(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  cookiesUploading.value = true
+  cookiesMsg.value = ''
+  cookiesError.value = false
+  try {
+    const res = await API.uploadCookies(file)
+    cookiesPresent.value = true
+    cookiesEntryCount.value = res.data.entry_count ?? null
+    cookiesMsg.value = t('cookies.uploadSuccess')
+  } catch {
+    cookiesError.value = true
+    cookiesMsg.value = t('cookies.uploadError')
+  } finally {
+    cookiesUploading.value = false
+    event.target.value = ''
+  }
+}
+
+async function removeCookies() {
+  try {
+    await API.deleteCookies()
+    cookiesPresent.value = false
+    cookiesEntryCount.value = null
+    cookiesMsg.value = t('cookies.deleteSuccess')
+    cookiesError.value = false
+  } catch {
+    cookiesError.value = true
+    cookiesMsg.value = t('cookies.deleteError')
+  }
+}
+
 onMounted(() => {
   loadSoundcloudId()
+  loadCookiesStatus()
 })
 </script>

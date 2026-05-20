@@ -169,6 +169,22 @@ function extractSoundcloudClientId(html) {
   return API.post('/api/soundcloud/extract', { html })
 }
 
+function getCookiesStatus() {
+  return API.get('/api/cookies')
+}
+
+function uploadCookies(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return API.post('/api/cookies', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+function deleteCookies() {
+  return API.delete('/api/cookies')
+}
+
 function authStatus() {
   return API.get('/api/auth')
 }
@@ -221,6 +237,9 @@ export default {
   clearAllCache,
   discoverSoundcloudClientId,
   extractSoundcloudClientId,
+  getCookiesStatus,
+  uploadCookies,
+  deleteCookies,
   authStatus,
   authLogin,
   authLogout,

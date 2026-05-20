@@ -153,15 +153,11 @@ export default {
       'Necessário para usar o SoundCloud como 6ª fonte de metadados durante a votação.',
     soundcloudPlaceholder: 'Cole client_id…',
     soundcloudDiscover: 'Auto-detectar',
-    soundcloudFound: 'Client ID extraído e salvo.',
+    soundcloudFound: 'Client ID detectado e salvo.',
     soundcloudNotFound:
-      'Não foi possível extrair o client ID. Certifique-se de ter colado o código-fonte completo.',
+      'Não foi possível detectar o client ID. Verifique a conectividade e tente novamente.',
     soundcloudNote:
-      'O SoundCloud rotaciona esse ID a cada poucos meses. Cole o código-fonte novamente quando as buscas pararem de funcionar.',
-    soundcloudHtmlHint:
-      'Abra soundcloud.com no navegador → Ctrl+U → copie tudo → cole aqui:',
-    soundcloudHtmlPlaceholder: 'Cole o código-fonte do soundcloud.com aqui…',
-    soundcloudExtract: 'Extrair client_id',
+      'O SoundCloud rotaciona esse ID a cada poucos meses. Clique em Auto-detectar novamente quando as buscas pararem de funcionar.',
     separatorTokens: 'Separadores de Artista',
     separatorTokensHint:
       'Ao votar nos nomes de artistas entre as fontes, esses tokens são usados para dividir entradas (ex.: "feat.", "&"). A contagem é feita com nomes individuais.',
@@ -312,6 +308,18 @@ export default {
     playFromLibrary: 'Abrir no player',
     countOne: '{count} faixa',
     countMany: '{count} faixas',
+  },
+  cookies: {
+    title: 'Cookies do YouTube',
+    hint: 'Faça upload de um arquivo cookies.txt para contornar a detecção de bots. Obtenha-o do seu navegador com uma extensão "cookies.txt" enquanto estiver logado no YouTube.',
+    statusNone: 'Sem cookies — downloads podem falhar neste IP',
+    statusLoaded: 'Cookies carregados — {count} entradas',
+    upload: 'Enviar cookies.txt',
+    delete: 'Remover cookies',
+    uploadSuccess: 'Cookies enviados. Os downloads vão usá-los imediatamente.',
+    uploadError: 'Falha no upload. Verifique se o arquivo é um cookies.txt válido.',
+    deleteSuccess: 'Cookies removidos.',
+    deleteError: 'Não foi possível remover os cookies.',
   },
   footer: {
     tagline: 'Baixador de músicas de código aberto',

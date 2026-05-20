@@ -299,7 +299,12 @@ class Downloader:
         # Netscape-format cookies.txt; DOWNTIFY_COOKIES_FROM_BROWSER takes
         # "<browser>" or "<browser>:<profile>" (e.g. "firefox" or
         # "chrome:Default").
+        # Fallback: use /data/cookies.txt when uploaded via the Settings UI.
         cookies_file = os.getenv('DOWNTIFY_COOKIES_FILE', '').strip()
+        if not cookies_file:
+            default_cookies = Path('/data/cookies.txt')
+            if default_cookies.exists():
+                cookies_file = str(default_cookies)
         if cookies_file:
             ydl_opts['cookiefile'] = cookies_file
         cookies_browser = os.getenv(

@@ -33,10 +33,12 @@ from typing import Any, Optional
 from fastapi import (
     APIRouter,
     Body,
+    File,
     HTTPException,
     Query,
     Request,
     Response,
+    UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -815,6 +817,57 @@ async def soundcloud_extract_client_id(request: Request) -> dict[str, Any]:
     if state.settings_path is not None:
         _save_settings_full(state.settings_path, state.settings)
     return {'client_id': cid}
+
+
+def _cookies_path() -> Path:
+    if state.settings_path is not None:
+        return state.settings_path.parent / 'cookies.txt'
+    return Path('/data/cookies.txt')
+
+
+@router.get('/api/cookies')
+def cookies_status() -> dict[str, Any]:
+    """Returns whether a cookies.txt file is present and basic stats."""
+    p = _cookies_path()
+    if not p.exists():
+        return {'present': False}
+    try:
+        content = p.read_text(encoding='utf-8', errors='replace')
+        lines = [l for l in content.splitlines() if l.strip() and not l.startswith('#')]
+        return {
+            'present': True,
+            'size_bytes': p.stat().st_size,
+            'entry_count': len(lines),
+        }
+    except Exception:
+        return {'present': True, 'size_bytes': p.stat().st_size, 'entry_count': None}
+
+
+@router.post('/api/cookies')
+async def cookies_upload(file: UploadFile = File(...)) -> dict[str, Any]:
+    """Upload a Netscape-format cookies.txt file for yt-dlp."""
+    p = _cookies_path()
+    try:
+        data = await file.read()
+        p.write_bytes(data)
+        content = data.decode('utf-8', errors='replace')
+        lines = [l for l in content.splitlines() if l.strip() and not l.startswith('#')]
+        return {'ok': True, 'entry_count': len(lines), 'size_bytes': len(data)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.delete('/api/cookies')
+def cookies_delete() -> dict[str, Any]:
+    """Remove the uploaded cookies.txt file."""
+    p = _cookies_path()
+    if not p.exists():
+        raise HTTPException(status_code=404, detail='No cookies file found')
+    try:
+        p.unlink()
+        return {'ok': True}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get('/api/organizer/status')

@@ -152,15 +152,11 @@ export default {
       'Required to use SoundCloud as a 6th metadata source during voting.',
     soundcloudPlaceholder: 'Paste client_id…',
     soundcloudDiscover: 'Auto-detect',
-    soundcloudFound: 'Client ID extracted and saved.',
+    soundcloudFound: 'Client ID detected and saved.',
     soundcloudNotFound:
-      'Could not extract client ID. Make sure you pasted the full page source.',
+      'Could not detect client ID. Check network connectivity and try again.',
     soundcloudNote:
-      'SoundCloud rotates this ID every few months. Re-paste the page source when lookups stop working.',
-    soundcloudHtmlHint:
-      'Open soundcloud.com in your browser → Ctrl+U → copy all → paste here:',
-    soundcloudHtmlPlaceholder: 'Paste soundcloud.com page source here…',
-    soundcloudExtract: 'Extract client_id',
+      'SoundCloud rotates this ID every few months. Click Auto-detect again when lookups stop working.',
     separatorTokens: 'Artist Separator Tokens',
     separatorTokensHint:
       'When voting on artist names across sources, these tokens are used to split entries (e.g. "feat.", "&"). The voting then counts individual names.',
@@ -311,6 +307,18 @@ export default {
     playFromLibrary: 'Open in player',
     countOne: '{count} track',
     countMany: '{count} tracks',
+  },
+  cookies: {
+    title: 'YouTube Cookies',
+    hint: 'Upload a cookies.txt file to bypass bot detection. Get it from your browser with a "cookies.txt" extension while logged into YouTube.',
+    statusNone: 'No cookies loaded — downloads may fail on this IP',
+    statusLoaded: 'Cookies loaded — {count} entries',
+    upload: 'Upload cookies.txt',
+    delete: 'Remove cookies',
+    uploadSuccess: 'Cookies uploaded. Downloads will use them immediately.',
+    uploadError: 'Upload failed. Make sure the file is a valid cookies.txt.',
+    deleteSuccess: 'Cookies removed.',
+    deleteError: 'Could not remove cookies.',
   },
   footer: {
     tagline: 'Open source music downloader',
