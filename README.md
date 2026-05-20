@@ -3,7 +3,7 @@
     <img width="100" height="100" alt="downtiplx-logo" src="https://github.com/user-attachments/assets/2549a0e9-182e-4880-9938-a178d16326ca" />
   </picture>
   <br>
-  DowntiplX
+  Downtiplx
 </h1>
 
 <p align="center">
