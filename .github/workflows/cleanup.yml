@@ -1,0 +1,19 @@
+name: Cleanup old packages
+
+on:
+  workflow_run:
+    workflows: ["Docker"]
+    types: [completed]
+  schedule:
+    - cron: '0 3 * * 0'
+
+jobs:
+  delete-old-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: downtify
+          package-type: container
+          min-versions-to-keep: 3
+          token: ${{ secrets.GITHUB_TOKEN }}
