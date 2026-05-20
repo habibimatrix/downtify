@@ -11,15 +11,26 @@
 </template>
 
 <script setup>
-import { onBeforeMount } from 'vue'
+import { onMounted } from 'vue'
 import Footer from './components/Footer.vue'
 import Settings from './components/Settings.vue'
 import { useBinaryThemeManager } from './model/theme'
+import API from './model/api'
+import { updateFromWs } from './model/downloadStore'
 
 const themeMgr = useBinaryThemeManager()
-onBeforeMount(() => {
+onMounted(() => {
   themeMgr.setLightAlias('downtiplx-light')
   themeMgr.setDarkAlias('downtiplx-dark')
+
+  // Global persistent WS listener — keeps the Navbar badge in sync no matter
+  // which page the user is on. Downloads.vue replaces this handler when mounted
+  // but also calls updateFromWs itself, then restores this handler on unmount.
+  API.ws_onmessage((event) => {
+    try {
+      updateFromWs(JSON.parse(event.data))
+    } catch {}
+  })
 })
 </script>
 

@@ -363,10 +363,7 @@ import Settings from '/src/components/Settings.vue'
 import AuditModal from '/src/components/AuditModal.vue'
 import API from '/src/model/api'
 import { useI18n } from '/src/i18n'
-import {
-  activeDownloadCount,
-  activeOrganizerCount,
-} from '/src/model/downloadStore'
+import { updateFromWs } from '/src/model/downloadStore'
 import { useProgressTracker } from '/src/model/download'
 
 const pt = useProgressTracker()
@@ -387,23 +384,9 @@ const deleting = ref({})
 
 // ── Section 1: Active Downloads ──────────────────────────────────────────────
 const activeDownloads = ref([])
-watch(
-  activeDownloads,
-  (v) => {
-    activeDownloadCount.value = v.length
-  },
-  { immediate: true }
-)
 
 // ── Section 2: Organizer pipeline ────────────────────────────────────────────
 const organizingJobs = ref([])
-watch(
-  organizingJobs,
-  (v) => {
-    activeOrganizerCount.value = v.length
-  },
-  { immediate: true }
-)
 
 // ── Audit modal ───────────────────────────────────────────────────────────────
 const auditModal = ref(false)
@@ -424,6 +407,9 @@ function handleWsMessage(event) {
   } catch {
     return
   }
+
+  // Keep global badge counts in sync even while this page is mounted.
+  updateFromWs(msg)
 
   const msgType = msg.type || ''
 
