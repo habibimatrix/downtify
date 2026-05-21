@@ -281,7 +281,6 @@ class Downloader:
             'extractor_args': {
                 'youtube': {'player_client': _yt_player_clients()}
             },
-            # PO Token / bgutil — filled in below after cookies are resolved.
 
             # Light pacing so we don't trigger 429 rate limits when the
             # user fires off multiple downloads back-to-back.
@@ -343,7 +342,9 @@ class Downloader:
             logger.info('yt-dlp: using {} static PO token(s)', len(po_tokens))
         bgutil = _bgutil_url()
         if bgutil:
-            yt_args['getpot_bgutil_baseurl'] = [bgutil]
+            # youtubepot-bgutilhttp:base_url is the v1.0+ configuration key
+            # for the bgutil-ytdlp-pot-provider HTTP server plugin.
+            ydl_opts['extractor_args']['youtubepot-bgutilhttp'] = {'base_url': [bgutil]}
             logger.info('yt-dlp: PO token via bgutil server at {}', bgutil)
 
         url = f'https://music.youtube.com/watch?v={video_id}'
