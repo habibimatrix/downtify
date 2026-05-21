@@ -141,5 +141,7 @@ yarl==1.23.0
     # via aiohttp
 yt-dlp
     # via downtify
+bgutil-yt-dlp-pot-provider
+    # via downtify (PO Token support for YouTube bot detection bypass)
 ytmusicapi==1.12.0
     # via downtify

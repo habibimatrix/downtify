@@ -111,6 +111,14 @@ def _yt_po_tokens() -> list[str]:
     return [t.strip() for t in raw.split(',') if t.strip()]
 
 
+def _bgutil_url() -> str:
+    """URL of the bgutil-yt-dlp-pot-provider HTTP server for automatic PO Token generation.
+
+    Set DOWNTIFY_BGUTIL_URL=http://bgutil:4416 in docker-compose to enable.
+    """
+    return os.getenv('DOWNTIFY_BGUTIL_URL', '').strip()
+
+
 class Downloader:
     """Wraps ``yt-dlp`` plus ``mutagen`` tagging."""
 
@@ -273,6 +281,8 @@ class Downloader:
             'extractor_args': {
                 'youtube': {'player_client': _yt_player_clients()}
             },
+            # PO Token / bgutil — filled in below after cookies are resolved.
+
             # Light pacing so we don't trigger 429 rate limits when the
             # user fires off multiple downloads back-to-back.
             'sleep_interval_requests': 1,
@@ -322,6 +332,19 @@ class Downloader:
             ydl_opts['cookiesfrombrowser'] = (
                 (parts[0],) if len(parts) == 1 else (parts[0], parts[1])
             )
+
+        # PO Token support — two modes:
+        # 1. Static tokens via DOWNTIFY_YT_PO_TOKEN (manual, expire after hours/days)
+        # 2. Automatic via bgutil server at DOWNTIFY_BGUTIL_URL (recommended)
+        yt_args = ydl_opts['extractor_args']['youtube']
+        po_tokens = _yt_po_tokens()
+        if po_tokens:
+            yt_args['po_token'] = po_tokens
+            logger.info('yt-dlp: using {} static PO token(s)', len(po_tokens))
+        bgutil = _bgutil_url()
+        if bgutil:
+            yt_args['getpot_bgutil_baseurl'] = [bgutil]
+            logger.info('yt-dlp: PO token via bgutil server at {}', bgutil)
 
         url = f'https://music.youtube.com/watch?v={video_id}'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
