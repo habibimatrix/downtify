@@ -1,3 +1,7 @@
+> [!WARNING]
+> Hey everyone, I'm not a developer and do most of this code is made with Claude. The idea of building something cool is dragging on because for some reason I've been IP-blocked by YouTube, yt-dlp isn't working properly (also not with the cookie.txt way) and so I can't finish testing the whole thing. Honestly a shame, I don't know if I'll continue here or if any of this even works... so for anyone downloading it, don't expect it to work yet. I'll give it 30 days and hope that I get unblocked again. If you have a tips or trick let me know.
+> Thanks, see you soon.
+
 <h1 align="center">
   <picture>
 <img width="100" height="100" alt="downtiplx-logo" src="https://github.com/user-attachments/assets/b60a2771-d785-44e5-b25d-145398c31332" />
