@@ -112,40 +112,14 @@ def _yt_po_tokens() -> list[str]:
 
 
 def _bgutil_url() -> str:
-    """URL of the bgutil-yt-dlp-pot-provider HTTP server for automatic PO Token generation.
+    """URL of the bgutil-ytdlp-pot-provider HTTP server.
 
     Set DOWNTIFY_BGUTIL_URL=http://bgutil:4416 in docker-compose to enable.
+    The bgutil plugin (installed via bgutil-ytdlp-pot-provider package) reads
+    this URL from extractor_args['youtubepot-bgutilhttp']['base_url'] and
+    handles all token generation + visitor_data binding automatically.
     """
     return os.getenv('DOWNTIFY_BGUTIL_URL', '').strip()
-
-
-def _get_bgutil_po_token(bgutil_url: str, video_id: str = '') -> Optional[str]:
-    """Call the bgutil HTTP server directly to get a fresh PO token.
-
-    Bypasses the yt-dlp plugin registration which is unreliable in containers.
-    The bgutil server returns a token valid for ~6 hours.
-    """
-    import json
-    import urllib.request as _urlreq
-
-    try:
-        data = json.dumps({
-            'visitorData': '',
-            'videoId': video_id,
-            'client': 'WEB',
-        }).encode()
-        req = _urlreq.Request(
-            f'{bgutil_url}/get_pot',
-            data=data,
-            headers={'Content-Type': 'application/json'},
-            method='POST',
-        )
-        with _urlreq.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode())
-            return result.get('poToken')
-    except Exception as exc:
-        logger.warning('bgutil: failed to get PO token: {}', exc)
-        return None
 
 
 class Downloader:
@@ -364,6 +338,16 @@ class Downloader:
         # PO Token support — two modes:
         # 1. Static tokens via DOWNTIFY_YT_PO_TOKEN (manual, expire after hours/days)
         # 2. Automatic via bgutil server at DOWNTIFY_BGUTIL_URL (recommended)
+        #
+        # For bgutil: the bgutil-ytdlp-pot-provider pip package installs a
+        # yt-dlp plugin (getpot_bgutil_http.py) that registers itself as a
+        # PoTokenProvider via yt-dlp's built-in POT system.  The plugin reads
+        # its base_url from extractor_args['youtubepot-bgutilhttp']['base_url'].
+        # yt-dlp calls the provider automatically when it needs a PO token,
+        # passing its own visitor_data so the token is correctly bound.
+        # This is the ONLY correct approach — injecting a token fetched
+        # independently fails because the token would be bound to a different
+        # visitor_data than the one yt-dlp is using for the session.
         yt_args = ydl_opts['extractor_args']['youtube']
         po_tokens = _yt_po_tokens()
         if po_tokens:
@@ -371,16 +355,17 @@ class Downloader:
             logger.info('yt-dlp: using {} static PO token(s)', len(po_tokens))
         bgutil = _bgutil_url()
         if bgutil:
-            po_token = _get_bgutil_po_token(bgutil, video_id)
-            if po_token:
-                # Inject token directly — plugin registration is unreliable in containers.
-                # web client with a valid PO token is the most capable client.
-                yt_args['po_token'] = [f'web.gvs+{po_token}', f'web.player+{po_token}']
-                clients = _yt_player_clients()
-                yt_args['player_client'] = ['web'] + [c for c in clients if c != 'web']
-                logger.info('yt-dlp: PO token from bgutil — web client prioritised')
-            else:
-                logger.warning('yt-dlp: bgutil reachable but returned no token')
+            # Configure the bgutil HTTP plugin — it will supply PO tokens
+            # bound to yt-dlp's visitor_data on demand.
+            ydl_opts['extractor_args']['youtubepot-bgutilhttp'] = {
+                'base_url': [bgutil]
+            }
+            # The `web` client is the primary consumer of PO tokens.
+            # Move it to the front so the plugin is actually invoked.
+            clients = _yt_player_clients()
+            clients = ['web'] + [c for c in clients if c != 'web']
+            yt_args['player_client'] = clients
+            logger.info('yt-dlp: bgutil POT plugin at {} — web client first', bgutil)
 
         url = f'https://music.youtube.com/watch?v={video_id}'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
