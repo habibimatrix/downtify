@@ -56,6 +56,7 @@ def _sanitize(text: str) -> str:
 _DEFAULT_YT_PLAYER_CLIENTS = (
     'ios',
     'android',
+    'web_music',
     'web_embedded',
     'mweb',
     'web',
@@ -363,9 +364,9 @@ class Downloader:
             # The `web` client is the primary consumer of PO tokens.
             # Move it to the front so the plugin is actually invoked.
             clients = _yt_player_clients()
-            clients = ['web'] + [c for c in clients if c != 'web']
+            clients = ['web', 'web_music'] + [c for c in clients if c not in ('web', 'web_music')]
             yt_args['player_client'] = clients
-            logger.info('yt-dlp: bgutil POT plugin at {} — web client first', bgutil)
+            logger.info('yt-dlp: bgutil POT plugin at {} — web+web_music first', bgutil)
 
         url = f'https://music.youtube.com/watch?v={video_id}'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
