@@ -24,11 +24,11 @@
 
 ---
 
-## What is DowntiplX?
+## What is Downtiplx?
 
-DowntiplX started as a personal fork of [Downtify](https://github.com/henriquesebastiao/downtify) — a project that already solved the hard part beautifully: paste a Spotify link, get a perfectly tagged audio file in seconds, no API key, no account needed. That works out of the box and is genuinely impressive engineering.
+Downtiplx started as a personal fork of [Downtify](https://github.com/henriquesebastiao/downtify) — a project that already solved the hard part beautifully: paste a Spotify link, get a perfectly tagged audio file in seconds, no API key, no account needed. That works out of the box and is genuinely impressive engineering.
 
-What DowntiplX adds on top is a single obsession:
+What Downtiplx adds on top is a single obsession:
 
 > *A well-organized NAS folder is not a luxury — it's a requirement.*
 
@@ -40,7 +40,7 @@ The Organizer layer is purely additive.
 
 ## Built on Downtify
 
-DowntiplX is built on top of [Downtify by henriquesebastiao](https://github.com/henriquesebastiao/downtify). The original already ships everything you need to just download music:
+Downtiplx is built on top of [Downtify by henriquesebastiao](https://github.com/henriquesebastiao/downtify). The original already ships everything you need to just download music:
 
 - Spotify links (tracks, albums, playlists) without any API key
 - YouTube Music as audio source via `ytmusicapi`
@@ -48,11 +48,11 @@ DowntiplX is built on top of [Downtify by henriquesebastiao](https://github.com/
 - Playlist Monitor for hands-free auto-downloads
 - Multi-format output, real-time progress, multi-language UI
 
-DowntiplX extends this with the **Organizer** — a genre classification engine that runs after every download and sorts your library automatically. If you just want a downloader, the original Downtify is the right tool. If you want a self-organizing music library on your NAS, that's what this fork is for.
+Downtiplx extends this with the **Organizer** — a genre classification engine that runs after every download and sorts your library automatically. If you just want a downloader, the original Downtify is the right tool. If you want a self-organizing music library on your NAS, that's what this fork is for.
 
 ---
 
-## What's Added in DowntiplX
+## What's Added in Downtiplx
 
 | Feature | Details |
 |---|---|
@@ -160,7 +160,7 @@ Spotify embed page  →  YouTube Music search  →  yt-dlp + ffmpeg + mutagen
 
 ## How It Works — The Organizer Pipeline
 
-The Organizer is the heart of DowntiplX. Every downloaded (or manually scanned) audio file passes through **12 deterministic steps**:
+The Organizer is the heart of Downtiplx. Every downloaded (or manually scanned) audio file passes through **12 deterministic steps**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -237,7 +237,7 @@ Prefix a filename with `pfad_`. The Organizer detects it, skips the entire votin
 
 SoundCloud requires a `client_id` that rotates every few months. Auto-detection requires an outbound request from inside the container — which fails on most home server setups behind NAT.
 
-**DowntiplX solution:** you extract it in your browser:
+**Downtiplx solution:** you extract it in your browser:
 
 1. Open [soundcloud.com](https://soundcloud.com) in your browser
 2. Press `Ctrl+U` to open page source
@@ -296,7 +296,7 @@ Watch Spotify playlists and auto-download new songs as they appear — hands-fre
 ---
 
 > [!WARNING]
-> Users are responsible for their actions and any legal consequences. DowntiplX does not support unauthorized downloading of copyrighted material and takes no responsibility for user actions.
+> Users are responsible for their actions and any legal consequences. Downtiplx does not support unauthorized downloading of copyrighted material and takes no responsibility for user actions.
 
 ---
 
