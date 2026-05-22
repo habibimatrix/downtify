@@ -34,7 +34,7 @@ What DowntiplX adds on top is a single obsession:
 
 The **12-step Organizer pipeline** classifies every downloaded file, votes on the correct genre across up to 6 independent sources, applies your custom rules, and caches the result permanently — so the next song by the same artist takes milliseconds instead of seconds.
 
-All of the original Downtify features are preserved. The Organizer layer is purely additive.
+The Organizer layer is purely additive.
 
 ---
 
@@ -63,20 +63,9 @@ DowntiplX extends this with the **Organizer** — a genre classification engine 
 | **SoundCloud via HTML-paste** | Extract `client_id` locally — works in air-gapped containers |
 | **3-section download view** | Separate panels for Active / Organizing / Done |
 | **API health status bar** | Live green/red dots per API on the welcome page |
-| **Orange PLX branding** | New logo and identity |
 
 ---
 
-## Quick Start
-
-```bash
-docker run -d -p 8000:8000 --name downtiplx \
-  -v /path/to/music:/downloads \
-  -v downtiplx_data:/data \
-  ghcr.io/habibimatrix/downtify:latest
-```
-
-Open [http://localhost:8000](http://localhost:8000), paste a Spotify link, hit download.
 
 ### Docker Compose
 
@@ -92,6 +81,8 @@ services:
       - ./data:/data              # SQLite DBs + settings
     restart: unless-stopped
 ```
+
+Open [http://localhost:8000](http://localhost:8000), paste a Spotify link, hit download.
 
 **Volume breakdown:**
 - `/downloads` — all audio files, organized by the Organizer pipeline
