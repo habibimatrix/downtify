@@ -336,6 +336,11 @@ class Downloader:
                 (parts[0],) if len(parts) == 1 else (parts[0], parts[1])
             )
 
+        proxy = os.getenv('DOWNTIFY_PROXY', '').strip()
+        if proxy:
+            ydl_opts['proxy'] = proxy
+            logger.info('yt-dlp: using proxy {}', proxy)
+
         # PO Token support — two modes:
         # 1. Static tokens via DOWNTIFY_YT_PO_TOKEN (manual, expire after hours/days)
         # 2. Automatic via bgutil server at DOWNTIFY_BGUTIL_URL (recommended)
