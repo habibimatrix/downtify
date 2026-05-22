@@ -361,18 +361,7 @@ class Downloader:
             ydl_opts['extractor_args']['youtubepot-bgutilhttp'] = {
                 'base_url': [bgutil]
             }
-            # With bgutil providing PO tokens, cookies are no longer needed
-            # for bot-detection bypass. Removing them allows ios/android
-            # clients to run — they skip cookies but deliver reliable audio
-            # streams for YouTube Music-exclusive tracks where web-only
-            # clients return storyboard images instead of audio.
-            ydl_opts.pop('cookiefile', None)
-            ydl_opts.pop('cookiesfrombrowser', None)
-            # ios/android first for audio formats; web/web_music get PO tokens
-            # from bgutil as fallback for bot-challenged clients.
-            clients = _yt_player_clients()
-            yt_args['player_client'] = clients
-            logger.info('yt-dlp: bgutil POT plugin at {} — cookies removed, ios/android enabled', bgutil)
+            logger.info('yt-dlp: bgutil POT plugin at {}', bgutil)
 
         url = f'https://music.youtube.com/watch?v={video_id}'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
