@@ -143,7 +143,5 @@ yt-dlp
     # via downtify
 bgutil-ytdlp-pot-provider
     # via downtify (PO Token support for YouTube bot detection bypass)
-yt-dlp-get-pot
-    # via bgutil-ytdlp-pot-provider (plugin framework, not auto-installed as dependency)
 ytmusicapi==1.12.0
     # via downtify
