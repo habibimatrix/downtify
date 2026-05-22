@@ -54,12 +54,22 @@ _album_track_cache: dict[
 _album_browse_search_cache: dict[str, str] = {}
 
 
+_OAUTH_DEFAULT_PATH = '/data/ytmusic_oauth.json'
+
+
 def _ytm() -> YTMusic:
     global _client
     if _client is None:
         with _lock:
             if _client is None:
-                _client = YTMusic()
+                import os
+                oauth_path = os.getenv('DOWNTIFY_YTMUSIC_OAUTH', _OAUTH_DEFAULT_PATH)
+                if os.path.exists(oauth_path):
+                    logger.info('YouTube Music: using OAuth from {}', oauth_path)
+                    _client = YTMusic(auth=oauth_path)
+                else:
+                    logger.info('YouTube Music: no OAuth file found, using unauthenticated')
+                    _client = YTMusic()
     return _client
 
 
